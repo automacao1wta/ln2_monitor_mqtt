@@ -1,0 +1,14 @@
+services:
+  mqtt-client:
+    build: .
+    volumes:
+      - ./output:/app/output:rw
+      - ./mqtt_project.log:/app/mqtt_project.log:rw
+  broker:
+    container_name: ioc_broker
+    restart: unless-stopped
+    image: eclipse-mosquitto:2.0.20
+    volumes:
+      - ./broker/config:/mosquitto/config:ro
+    ports:
+      - "1883:1883"

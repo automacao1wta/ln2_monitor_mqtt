@@ -1,0 +1,5 @@
+mqtt_project.log
+/__pycache__/
+/output/
+config.yaml
+logging.conf

@@ -1,0 +1,48 @@
+Comando para rodar o Cloud SQL Proxy
+
+# cd C:\Users\murilo.melo\Desktop\Desenvolvimento\LN2_Monitor\mqttclient.\cloud-sql-proxy.exe --credentials-file=coral-ring-463120-e6-1e914ca7754c.json --port=5432 coral-ring-463120-e6:us-central1:ln2-monitor-postgresql
+
+Comando para criar a tabela:
+
+CREATE TABLE mqtt_messages (
+    id SERIAL PRIMARY KEY,
+    topic TEXT,
+    start_flag VARCHAR(40),
+    package_type VARCHAR(40),
+    beacon_serial VARCHAR(40),
+    vccbat FLOAT,
+    epochtime_b VARCHAR(40),
+    epochtime_g VARCHAR(40),
+    crc VARCHAR(40),
+    package_id INTEGER,
+    temp2 FLOAT,
+    r1 VARCHAR(40),
+    r2 VARCHAR(40),
+    r3 VARCHAR(40),
+    r4 VARCHAR(40),
+    r5 VARCHAR(40),
+    r6 VARCHAR(40),
+    r7 VARCHAR(40),
+    r8 VARCHAR(40),
+    r9 VARCHAR(40),
+    r10 VARCHAR(40),
+    r11 VARCHAR(40),
+    sensor_data_def_id VARCHAR(40),
+    fw_version_prefix VARCHAR(40),
+    fw_version_major VARCHAR(40),
+    fw_version_minor VARCHAR(40),
+    fw_version_patch VARCHAR(40),
+    fw_version_build VARCHAR(40),
+    ln2_level_status VARCHAR(40),
+    ln2_angle_status VARCHAR(40),
+    ln2_battery_status VARCHAR(40),
+    batt_percent VARCHAR(40),
+    ln2_foam_status VARCHAR(40),
+    ln2_general_status VARCHAR(40),
+    status_osc_cnt_msb VARCHAR(40),
+    status_osc_cnt_lsb VARCHAR(40),
+    ln2_acc_data_available VARCHAR(40),
+    ln2_tx_cause_status VARCHAR(40),
+    rssi INTEGER,
+    original_payload TEXT
+);
