@@ -334,8 +334,10 @@ class MessageProcessor:
         timestamp_str = self.messages[-1]['epochtime_b']
         fname = f"{timestamp_str}.json"
         outpath = os.path.join(self.output_path, fname)
-        with open(outpath, "w") as f:
-            json.dump(self.messages, f)
+        
+        # Comentar esta linha se quiser não salvar em JSON
+        # with open(outpath, "w") as f:
+        #     json.dump(self.messages, f)
 
         self.logger.info(f"Saving messages into {fname}")
 
