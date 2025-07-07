@@ -2,7 +2,7 @@ broker:
   # host: 192.168.0.106 # 192.168.0.106 (ioc-1) # 192.168.1.112 (wzoo) # 192.168.0.99 (IoC) 10.227.101.10  (IoC101)  Replace with your broker's hostname or IP address, 
   # raspberrypi-inselli @ IoC: fixado no roteador em 10.227.1091.10
   # Roteador IoC: 10.227.101.11
-  host: 35.238.218.156 # SERVIDOR LOCAL 10.227.101.110 # ip 35.238.218.156 VM em GCP
+  host: 34.10.196.198 # SERVIDOR LOCAL 10.227.101.110 # ip 35.238.218.156 VM em GCP
   port: 1883
 client:
   client_id: ln2_0000001  # Choose a unique client ID
