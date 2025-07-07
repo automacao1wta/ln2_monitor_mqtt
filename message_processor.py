@@ -334,7 +334,7 @@ class MessageProcessor:
         timestamp_str = self.messages[-1]['epochtime_b']
         fname = f"{timestamp_str}.json"
         outpath = os.path.join(self.output_path, fname)
-        
+
         # Comentar esta linha se quiser não salvar em JSON
         # with open(outpath, "w") as f:
         #     json.dump(self.messages, f)
@@ -396,8 +396,8 @@ class MessageProcessor:
                     gateway_serial, message_dict = self._load_message(message, message_timestamp)
 
                     # Filter beacons
-                    if BEACONS and message_dict['beacon_serial'] not in BEACONS:
-                        continue
+                    # if BEACONS and message_dict['beacon_serial'] not in BEACONS:
+                    #     continue
 
                     # Filter out duplicates
                     #if self.is_duplicate(message_dict):
