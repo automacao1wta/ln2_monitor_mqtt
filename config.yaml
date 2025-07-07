@@ -1,0 +1,33 @@
+broker:
+  # host: 192.168.0.106 # 192.168.0.106 (ioc-1) # 192.168.1.112 (wzoo) # 192.168.0.99 (IoC) 10.227.101.10  (IoC101)  Replace with your broker's hostname or IP address, 
+  # raspberrypi-inselli @ IoC: fixado no roteador em 10.227.1091.10
+  # Roteador IoC: 10.227.101.11
+  host: 35.238.218.156 # SERVIDOR LOCAL 10.227.101.110 # ip 35.238.218.156 VM em GCP
+  port: 1883
+client:
+  client_id: ln2_0000001  # Choose a unique client ID
+  username: ln2_mqtt_pc_murilo # PC Murilo
+  password: '123456789'
+topics: # MQTT topics/gateways (leave empty for all topics)
+  # - WTAD4D4DA2DE6B4/#   # - WTAD4D4DA2DE6B4/#,  - WTAD4D4DA2DE680/#,  - WTAD4D4DA2DE690/#
+  # - WTAD4D4DA2DE680/# # Fw LN2
+  # - WTAD4D4DA2DE670/#   # Gateway LN2 Murilo
+  - +/Pub
+  - +/tempHum
+message_processor:
+  output_path: ./output
+  beacons: # Beacons serial list (leave empty for all beacons)
+    #- 90395E0AD160  # Beacon da giga do RSR
+    #- 3425B4B02B6D  # Beacon Mini Rev 0.3
+
+    # - 90395E0AB284  # Beacon do LN2 SN02 Rogerio
+    - 90395E0AE8A7  # Beacon do LN2 SN02 Murilo
+
+    # - 90395E0AC480  # SN 504, 90395E0AC480  # 405 esta errado na planilha: 90395E0AD54E. O certo é 90395E0AC480 que na planilha está no 507
+    # - 90395E0AF691  # Beacon para teste do Banze
+    #- 90395E0AF312  # Beacon sn514 com fw do Banze, levado para a fazenda Primavera em 10/04/2025
+    # - 90395E0AC97B  # Beacon com suspeita de bateria baixa, Murilo
+    # - 3425B4B02B69  # Beacon da giga girante.
+    # - 3425B4B02B66 # Beacon que apareceu no mosquito-sub
+  sample_rate_ms: 1000 # Period (ms) of the accelerometer
+  num_ids_to_store_per_beacon: 10 # Max number of stored ids per beacon to check for duplicates
