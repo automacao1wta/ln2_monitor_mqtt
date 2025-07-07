@@ -1,5 +1,6 @@
 services:
   mqtt-client:
+    container_name: mqtt_client
     build: .
     volumes:
       - ./output:/app/output:rw

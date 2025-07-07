@@ -39,7 +39,7 @@ class MessageProcessor:
                 dbname="ln2-monitor-postgresql",
                 user="postgres",
                 password="wta@2025",
-                host="127.0.0.1", # 34.31.34.87
+                host="34.31.34.87", # 34.31.34.87 #
                 port=5432
             ) 
             self.db_cursor = self.db_conn.cursor()
