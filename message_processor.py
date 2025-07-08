@@ -196,12 +196,13 @@ class MessageProcessor:
         try:
             # Debug: conferir número de argumentos e tipos
             # print(len(values), values)
-            print("JSON enviado:", json.dumps(message_dict, indent=4, ensure_ascii=False))
+            # print("JSON enviado:", json.dumps(message_dict, indent=4, ensure_ascii=False))
             print("Valores enviados para o banco:", values)
-            print("Nº de %s no SQL:", sql.count('%s'))
-            print("Nº de valores:", len(values))
+            # print("Nº de %s no SQL:", sql.count('%s'))
+            # print("Nº de valores:", len(values))
             self.db_cursor.execute(sql, list(values))
             self.db_conn.commit()
+            print(f"Mensagem publicada no SQL para o beacon {message_dict.get('beacon_serial')} (package_id={message_dict.get('package_id')})")
         except Exception as e:
             self.logger.error(f"Erro ao inserir no banco: {e}")
         
@@ -393,14 +394,6 @@ class MessageProcessor:
         if beacon_serial not in self.last_beacon_data:
             self.last_beacon_data[beacon_serial] = (now, message_dict, hex_payload, topic)
         # Se já existe, descarta os demais até o próximo ciclo
-    def flush_beacon_data(self):
-        """
-        Envia para o banco o último pacote "normal" de cada beacon e limpa o cache.
-        """
-        for beacon_serial, (ts, message_dict, hex_payload, topic) in self.last_beacon_data.items():
-            if topic is not None:
-                self.save_message_to_db(topic, message_dict)
-        self.last_beacon_data.clear()
 
     def flush_beacon_data(self):
         """
