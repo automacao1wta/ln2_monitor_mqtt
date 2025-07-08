@@ -2,6 +2,50 @@ Comando para rodar o Cloud SQL Proxy
 
 # cd C:\Users\murilo.melo\Desktop\Desenvolvimento\LN2_Monitor\mqttclient.\cloud-sql-proxy.exe --credentials-file=coral-ring-463120-e6-1e914ca7754c.json --port=5432 coral-ring-463120-e6:us-central1:ln2-monitor-postgresql
 
+Para apenas apagar os dados:
+DELETE FROM mqtt_messages;
+
+Para apagar os dados e reiniciar o contador do campo id (SERIAL):
+TRUNCATE TABLE mqtt_messages RESTART IDENTITY;
+
+ssh -i C:\Users\murilo.melo\.ssh\id_ed25519 murilo.melo@34.10.196.198
+
+git clone https://github.com/automacao1wta/ln2_monitor_mqtt.git
+
+git pull origin master
+
+docker compose up --build
+
+docker compose down
+
+
+sudo apt update
+sudo apt install python3 python3-pip -y
+
+python3 main.py
+
+pip3 install -r requirements.txt
+
+🚀 Automatizando isso com um script
+Você pode criar um script update.sh simples:
+
+#!/bin/bash
+echo "Parando containers..."
+docker compose down
+
+echo "Atualizando repositório..."
+git pull origin master
+
+echo "Reconstruindo containers..."
+docker compose up --build -d
+
+
+chmod +x update.sh
+./update.sh
+
+docker compose logs -f
+
+
 Comando para criar a tabela:
 
 CREATE TABLE mqtt_messages (
@@ -46,3 +90,17 @@ CREATE TABLE mqtt_messages (
     rssi INTEGER,
     original_payload TEXT
 );
+
+# Variáveis para NOTIFICATIONS e ALERTAS
+    ln2_level_status VARCHAR(40),
+    ln2_angle_status VARCHAR(40),
+    ln2_battery_status VARCHAR(40),
+    ln2_foam_status VARCHAR(40),
+    ln2_general_status VARCHAR(40),
+    ln2_tx_cause_status VARCHAR(40),
+
+
+
+    "ln2_level_status": "04",
+    "ln2_angle_status": "04",
+    "ln2_battery_status": "04",

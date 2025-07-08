@@ -20,10 +20,11 @@ SAMPLE_RATE_MS = config['sample_rate_ms']
 NUM_IDS_TO_STORE_PER_BEACON = config['num_ids_to_store_per_beacon']
 BEACONS = config['beacons']
 
+
 class MessageProcessor:
     def __init__(self, message_queue: Queue[tuple[datetime, MQTTMessage]]) -> None:
         timestamp_now = datetime.now()
-        self.messages = []
+        self.messages = []  # Lista de pacotes "normais" a serem enviados a cada 5 min
         self.last_messages_reset_timestamp = timestamp_now
         self.messages_reset_interval = timedelta(minutes=5)
         self.duplicates_dict = defaultdict(lambda: deque(maxlen=NUM_IDS_TO_STORE_PER_BEACON))
@@ -32,6 +33,14 @@ class MessageProcessor:
         self.output_path = OUTPUT_PATH
         self.message_queue = message_queue
         self.schema = self._load_schema()
+
+        # Armazenar o último pacote "normal" de cada beacon
+        self.last_beacon_data = {}  # beacon_serial -> (timestamp, message_dict, hex_payload, topic)
+
+        # Controle de alertas por beacon
+        self.alerts_per_beacon = defaultdict(list)  # beacon_serial -> [timestamps dos alertas enviados na última hora]
+        self.ALERTS_PER_HOUR_LIMIT = 120  # Limite de alertas por hora por beacon (ajustável)
+        self.ALERT_STATUS_VALUE = "04"  # Valor considerado "normal" para status
 
         # PostgreSQL connection (Cloud SQL)
         try:
@@ -246,12 +255,12 @@ class MessageProcessor:
     
     def _get_status_comment(self, value: int) -> str:
         status_comments = {
-            -2: "Unknown",
-            -1: "Invalid",
-            0: "Off",
-            1: "On",
-            2: "Closed",
-            3: "Open",
+            -2: "Sem informação",
+            -1: "Dado inválido",
+            0: "Ligado",
+            1: "Desligado",
+            2: "Tampa fechada",
+            3: "Tampa aberto",
             4: "Good",
             5: "Warning",
             6: "Bad",
@@ -344,17 +353,63 @@ class MessageProcessor:
         self.messages = []
         
 
+
     def add_message(self, message_dict:dict, hex_payload:str, topic:str=None):
-        """Accumulate messages on self.messages and save to PostgreSQL."""
+        """
+        Acumula mensagens por beacon_serial para envio a cada 5 minutos.
+        Se detectar condição de alerta, envia imediatamente (respeitando o limite de alertas por hora).
+        """
         print(hex_payload)
         print(json.dumps(message_dict, indent=4))
         print('-' * 20, '\n')
 
         message_dict['original_payload'] = hex_payload
-        self.messages.append(message_dict)
-        # Salva no banco de dados
-        if topic is not None:
-            self.save_message_to_db(topic, message_dict)
+        beacon_serial = message_dict.get('beacon_serial')
+        now = datetime.now()
+
+        # --- Verificação de condição de alerta ---
+        # Se qualquer status for diferente de ALERT_STATUS_VALUE, é alerta
+        is_alert = False
+        for status_field in ["ln2_level_status", "ln2_angle_status", "ln2_battery_status"]:
+            val = message_dict.get(status_field)
+            if val is not None and val != self.ALERT_STATUS_VALUE:
+                is_alert = True
+                break
+
+        if is_alert:
+            # Limpeza dos alertas antigos (mais de 1h)
+            self.alerts_per_beacon[beacon_serial] = [t for t in self.alerts_per_beacon[beacon_serial] if (now - t).total_seconds() < 3600]
+            if len(self.alerts_per_beacon[beacon_serial]) < self.ALERTS_PER_HOUR_LIMIT:
+                # Envia alerta imediatamente
+                if topic is not None:
+                    self.save_message_to_db(topic, message_dict)
+                self.alerts_per_beacon[beacon_serial].append(now)
+                self.logger.info(f"Alerta enviado para {beacon_serial} em {now} (total na última hora: {len(self.alerts_per_beacon[beacon_serial])})")
+            else:
+                self.logger.info(f"Alerta descartado para {beacon_serial} (limite de {self.ALERTS_PER_HOUR_LIMIT} por hora atingido)")
+            return  # Não armazena para envio normal
+
+        # --- Acumulação normal: só armazena o primeiro pacote do beacon até o próximo ciclo de 5 min ---
+        if beacon_serial not in self.last_beacon_data:
+            self.last_beacon_data[beacon_serial] = (now, message_dict, hex_payload, topic)
+        # Se já existe, descarta os demais até o próximo ciclo
+    def flush_beacon_data(self):
+        """
+        Envia para o banco o último pacote "normal" de cada beacon e limpa o cache.
+        """
+        for beacon_serial, (ts, message_dict, hex_payload, topic) in self.last_beacon_data.items():
+            if topic is not None:
+                self.save_message_to_db(topic, message_dict)
+        self.last_beacon_data.clear()
+
+    def flush_beacon_data(self):
+        """
+        Envia para o banco o último pacote "normal" de cada beacon e limpa o cache.
+        """
+        for beacon_serial, (ts, message_dict, hex_payload, topic) in self.last_beacon_data.items():
+            if topic is not None:
+                self.save_message_to_db(topic, message_dict)
+        self.last_beacon_data.clear()
 
     def is_duplicate(self, message_dict:dict) -> bool:
         return message_dict['package_id'] in self.duplicates_dict[message_dict['beacon_serial']]
@@ -387,6 +442,7 @@ class MessageProcessor:
         return gateway_serial, message_dict
     
 
+
     def run(self):
         while True:
             try:
@@ -407,10 +463,10 @@ class MessageProcessor:
 
                     self.duplicates_dict[message_dict['beacon_serial']].append(message_dict['package_id'])
 
-                    # Save messages if messages_reset_interval was met
+                    # A cada ciclo de 5 minutos, envia o último pacote normal de cada beacon
                     timestamp_now = datetime.now()
                     if timestamp_now - self.last_messages_reset_timestamp >= self.messages_reset_interval:
-                        self.save_messages()
+                        self.flush_beacon_data()
                         self.last_messages_reset_timestamp = timestamp_now
 
                 # Gateway messages
