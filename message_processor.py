@@ -202,7 +202,7 @@ class MessageProcessor:
             # print("Nº de valores:", len(values))
             self.db_cursor.execute(sql, list(values))
             self.db_conn.commit()
-            print(f"Mensagem publicada no SQL para o beacon {message_dict.get('beacon_serial')} (package_id={message_dict.get('package_id')})")
+            print(f"Mensagem publicada no SQL para o beacon {message_dict.get('beacon_serial')} (package_id={message_dict.get('package_id')}) no tópico '{topic}' em {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         except Exception as e:
             self.logger.error(f"Erro ao inserir no banco: {e}")
         
@@ -371,7 +371,7 @@ class MessageProcessor:
         # --- Verificação de condição de alerta ---
         # Se qualquer status for diferente de ALERT_STATUS_VALUE, é alerta
         is_alert = False
-        for status_field in ["ln2_level_status", "ln2_angle_status", "ln2_battery_status"]:
+        for status_field in ["ln2_general_status"]: # "ln2_level_status", "ln2_angle_status", "ln2_battery_status", "ln2_foam_status"
             val = message_dict.get(status_field)
             if val is not None and val != self.ALERT_STATUS_VALUE:
                 is_alert = True
