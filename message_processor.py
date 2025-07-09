@@ -1,7 +1,7 @@
 import json
 import yaml
 from logger_config import setup_logger
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 from paho.mqtt.client import MQTTMessage
 from collections import deque, defaultdict
@@ -281,7 +281,7 @@ class MessageProcessor:
                 'tempAmbient': safe_float_convert(message_dict.get('temp_ambient')),  # Temperatura ambiente
                 'tempPT100': safe_float_convert(message_dict.get('temp_pt100')),  # Temperatura PT100
                 'vBat': safe_float_convert(message_dict.get('vbat_mv')) / 1000.0 if message_dict.get('vbat_mv') else None,  # Converter mV para V
-                'timestamp': now,  # Timestamp da mensagem
+                'timestamp': datetime.now(timezone.utc),  # Timestamp UTC da mensagem
                 'package_id': message_dict.get('package_id'),  # ID do pacote para referência
             }
             
