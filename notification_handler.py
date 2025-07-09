@@ -491,7 +491,8 @@ class NotificationHandler:
             try:
                 current_desc = self.message_processor._get_status_comment(int(current_value)).split(" - ", 1)[-1]
                 previous_desc = self.message_processor._get_status_comment(int(previous_value)).split(" - ", 1)[-1]
-            except:
+            except Exception as e:
+                self.logger.debug(f"Erro ao obter descrições: {e}")
                 current_desc = f"Status {current_value}"
                 previous_desc = f"Status {previous_value}"
         
@@ -705,20 +706,23 @@ class NotificationHandler:
             except ValueError:
                 pass
         
-        # Se é hexadecimal (2 caracteres), converter para decimal e depois para string com 2 dígitos
-        if len(value_str) == 2 and all(c in '0123456789ABCDEFabcdef' for c in value_str):
-            try:
-                decimal_value = int(value_str, 16)
-                return f"{decimal_value:02d}"  # Formato com 2 dígitos: 04, 10, etc.
-            except ValueError:
-                pass
-        
-        # Se já é decimal de 1-2 dígitos, formatar com 2 dígitos
+        # Se já é decimal de 1-3 dígitos, formatar com 2 dígitos
         try:
             decimal_value = int(value_str)
             return f"{decimal_value:02d}"
         except ValueError:
             pass
+        
+        # Se é hexadecimal (2 caracteres), converter para decimal e depois para string com 2 dígitos
+        # IMPORTANTE: Só tratar como hex se for EXATAMENTE 2 caracteres e for hex válido SEM ser decimal válido
+        if (len(value_str) == 2 and 
+            all(c in '0123456789ABCDEFabcdef' for c in value_str) and
+            any(c in 'ABCDEFabcdef' for c in value_str)):  # Deve conter pelo menos uma letra hex
+            try:
+                decimal_value = int(value_str, 16)
+                return f"{decimal_value:02d}"  # Formato com 2 dígitos: 04, 10, etc.
+            except ValueError:
+                pass
         
         # Retornar valor original se não conseguir normalizar
         return value_str

@@ -3,7 +3,7 @@
   "polling_interval_minutes": 10,
   "connection_timeout_hours": 1.0,
   "connection_check_enabled": true,
-  "max_notifications_per_device_per_hour": 20,
+  "max_notifications_per_device_per_hour": 6,
   "recovery_notifications_enabled": true,
   "group_notifications_same_device": true,
   "max_group_delay_seconds": 30,
