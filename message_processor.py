@@ -616,15 +616,29 @@ class MessageProcessor:
         try:
             if os.path.exists(self.mac_cache_file):
                 with open(self.mac_cache_file, 'r') as f:
-                    cache_data = json.load(f)
-                    self.mac_cache = cache_data.get('mac_mapping', {})
-                    self.last_cache_update = datetime.fromisoformat(cache_data.get('last_update', datetime.min.isoformat()))
-                    self.logger.info(f"Cache MAC carregado: {len(self.mac_cache)} equipamentos")
+                    file_content = f.read().strip()
+                    if file_content:  # Verificar se o arquivo não está vazio
+                        cache_data = json.loads(file_content)
+                        self.mac_cache = cache_data.get('mac_mapping', {})
+                        self.last_cache_update = datetime.fromisoformat(cache_data.get('last_update', datetime.min.isoformat()))
+                        self.logger.info(f"Cache MAC carregado: {len(self.mac_cache)} equipamentos")
+                    else:
+                        self.logger.warning("Arquivo de cache MAC está vazio, inicializando cache novo")
+                        self.mac_cache = {}
+                        self.last_cache_update = datetime.min
             else:
                 self.logger.info("Arquivo de cache MAC não encontrado, será criado")
+                self.mac_cache = {}
+                self.last_cache_update = datetime.min
+        except (json.JSONDecodeError, ValueError) as e:
+            self.logger.error(f"Erro ao decodificar JSON do cache MAC: {e}")
+            self.logger.info("Inicializando novo cache MAC")
+            self.mac_cache = {}
+            self.last_cache_update = datetime.min
         except Exception as e:
             self.logger.error(f"Erro ao carregar cache MAC: {e}")
             self.mac_cache = {}
+            self.last_cache_update = datetime.min
 
     def _save_mac_cache(self):
         """Salva o cache de MAC para Equipment ID no arquivo local"""

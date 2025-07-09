@@ -65,10 +65,10 @@ class NotificationConfig:
     def __post_init__(self):
         if self.normal_status_values is None:
             self.normal_status_values = {
-                "ln2_level_status": "04",     # Severidade: ALTA
-                "ln2_angle_status": "04",     # Severidade: BAIXA  
-                "ln2_battery_status": "04",   # Severidade: ALTA
-                "ln2_foam_status": "08",      # Severidade: BAIXA
+                "ln2_level_status": "04",     # Valor decimal normalizado (4 = Good)
+                "ln2_angle_status": "04",     # Valor decimal normalizado (4 = Good)  
+                "ln2_battery_status": "04",   # Valor decimal normalizado (4 = Good)
+                "ln2_foam_status": "08",      # Valor decimal normalizado (8 = Absent)
             }
         
         if self.field_severities is None:
@@ -286,22 +286,23 @@ class NotificationHandler:
             if current_value is None:
                 continue
             
-            # Extrair apenas o código numérico se for string formatada (ex: "04 - Good" -> "04")
-            if isinstance(current_value, str) and " - " in current_value:
-                current_value = current_value.split(" - ")[0]
+            # Normalizar valores para comparação (extrair código numérico)
+            normalized_current = self._normalize_status_value(current_value)
+            normalized_normal = self._normalize_status_value(normal_value)
             
             last_value = device_status.last_status_values.get(field_name)
+            normalized_last = self._normalize_status_value(last_value) if last_value else None
             
             # Detectar mudança de estado
-            if last_value != current_value:
+            if normalized_last != normalized_current:
                 notification = self._create_status_notification(
-                    equipment_id, field_name, current_value, normal_value, last_value
+                    equipment_id, field_name, normalized_current, normalized_normal, normalized_last
                 )
                 if notification:
                     notifications_to_add.append(notification)
                 
-                # Atualizar cache
-                device_status.last_status_values[field_name] = current_value
+                # Atualizar cache com valor normalizado
+                device_status.last_status_values[field_name] = normalized_current
         
         # 2. Verificar conexão (lastTX) se habilitado
         if self.config.connection_check_enabled:
@@ -329,8 +330,13 @@ class NotificationHandler:
         if not self._check_rate_limit(equipment_id, field_name):
             return None
         
-        current_is_normal = current_value == normal_value
-        last_was_normal = last_value == normal_value if last_value else True
+        # Normalizar valores para comparação
+        normalized_current = self._normalize_status_value(current_value)
+        normalized_normal = self._normalize_status_value(normal_value)
+        normalized_last = self._normalize_status_value(last_value) if last_value else None
+        
+        current_is_normal = normalized_current == normalized_normal
+        last_was_normal = normalized_last == normalized_normal if normalized_last else True
         
         # Casos para notificação:
         # 1. Normal -> Anormal: Alerta
@@ -343,17 +349,17 @@ class NotificationHandler:
         if last_was_normal and not current_is_normal:
             # Normal -> Anormal: ALERTA
             notification_type = f"{field_name}_alert"
-            message = self._get_status_alert_message(field_name, current_value)
+            message = self._get_status_alert_message(field_name, normalized_current)
         
         elif not last_was_normal and current_is_normal and self.config.recovery_notifications_enabled:
             # Anormal -> Normal: RECUPERAÇÃO
             notification_type = f"{field_name}_recovery"
             message = self._get_status_recovery_message(field_name)
         
-        elif not last_was_normal and not current_is_normal and last_value and current_value != last_value:
+        elif not last_was_normal and not current_is_normal and normalized_last and normalized_current != normalized_last:
             # Anormal -> Anormal (diferente): MUDANÇA
             notification_type = f"{field_name}_change"
-            message = self._get_status_change_message(field_name, current_value, last_value)
+            message = self._get_status_change_message(field_name, normalized_current, normalized_last)
         
         if not notification_type or not message:
             return None
@@ -365,8 +371,8 @@ class NotificationHandler:
             "field_name": field_name,
             "message": message,
             "deviceId": equipment_id,
-            "current_value": current_value,
-            "previous_value": last_value,
+            "current_value": normalized_current,
+            "previous_value": normalized_last,
             "severity": severity.value,
             "timestamp_emitted": datetime.now(timezone.utc).isoformat(),
             "status": "active",
@@ -436,6 +442,7 @@ class NotificationHandler:
         # Obter descrição do status usando a função do message_processor
         if self.message_processor and hasattr(self.message_processor, '_get_status_comment'):
             try:
+                # Converter valor normalizado (string) para int
                 status_comment = self.message_processor._get_status_comment(int(value))
                 description = status_comment.split(" - ", 1)[-1]  # Pegar apenas a descrição
             except:
@@ -570,14 +577,26 @@ class NotificationHandler:
             if device_status:
                 device_status.last_notification_timestamps[notification['type']] = datetime.now()
             
+            # Preparar notificação para envio (converter datetime para string)
+            notification_to_send = {}
+            for key, value in notification.items():
+                if isinstance(value, datetime):
+                    # Converter datetime para string ISO
+                    notification_to_send[key] = value.isoformat()
+                elif key == 'created_at' and isinstance(value, datetime):
+                    # Campo específico de controle interno, não enviar
+                    continue
+                else:
+                    notification_to_send[key] = value
+            
             # Enviar para o Realtime Database
             notification_path = f"{equipment_id}/NOTIFICATIONS/{notification_id}"
-            self.realtime_db.child(notification_path).set(notification)
+            self.realtime_db.child(notification_path).set(notification_to_send)
             
-            # Atualizar cache de notificações ativas
+            # Atualizar cache de notificações ativas (com dados originais)
             if equipment_id not in self.active_notifications_cache:
                 self.active_notifications_cache[equipment_id] = {}
-            self.active_notifications_cache[equipment_id][notification_id] = notification
+            self.active_notifications_cache[equipment_id][notification_id] = notification_to_send
             
             self.logger.info(f"Notificação enviada para {equipment_id}: {notification['type']} - {notification['message']}")
             
@@ -650,3 +669,33 @@ class NotificationHandler:
         
         # Salvar configurações
         self.save_config_to_file()
+    
+    def _normalize_status_value(self, value):
+        """Normaliza valores de status para comparação consistente"""
+        if value is None:
+            return None
+        
+        # Converter para string se necessário
+        value_str = str(value)
+        
+        # Se contém " - ", extrair apenas o código
+        if " - " in value_str:
+            value_str = value_str.split(" - ")[0]
+        
+        # Se é hexadecimal (2 caracteres), converter para decimal e depois para string com 2 dígitos
+        if len(value_str) == 2 and all(c in '0123456789ABCDEFabcdef' for c in value_str):
+            try:
+                decimal_value = int(value_str, 16)
+                return f"{decimal_value:02d}"  # Formato com 2 dígitos: 04, 10, etc.
+            except ValueError:
+                pass
+        
+        # Se já é decimal de 1-2 dígitos, formatar com 2 dígitos
+        try:
+            decimal_value = int(value_str)
+            return f"{decimal_value:02d}"
+        except ValueError:
+            pass
+        
+        # Retornar valor original se não conseguir normalizar
+        return value_str
