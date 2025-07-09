@@ -577,23 +577,14 @@ class NotificationHandler:
             if device_status:
                 device_status.last_notification_timestamps[notification['type']] = datetime.now()
             
-            # Preparar notificação para envio (converter datetime para string)
-            notification_to_send = {}
-            for key, value in notification.items():
-                if isinstance(value, datetime):
-                    # Converter datetime para string ISO
-                    notification_to_send[key] = value.isoformat()
-                elif key == 'created_at' and isinstance(value, datetime):
-                    # Campo específico de controle interno, não enviar
-                    continue
-                else:
-                    notification_to_send[key] = value
+            # Preparar notificação para envio (converter TODOS os valores datetime recursivamente)
+            notification_to_send = self._serialize_notification_data(notification)
             
             # Enviar para o Realtime Database
             notification_path = f"{equipment_id}/NOTIFICATIONS/{notification_id}"
             self.realtime_db.child(notification_path).set(notification_to_send)
             
-            # Atualizar cache de notificações ativas (com dados originais)
+            # Atualizar cache de notificações ativas
             if equipment_id not in self.active_notifications_cache:
                 self.active_notifications_cache[equipment_id] = {}
             self.active_notifications_cache[equipment_id][notification_id] = notification_to_send
@@ -602,6 +593,23 @@ class NotificationHandler:
             
         except Exception as e:
             self.logger.error(f"Erro ao enviar notificação para {equipment_id}: {e}")
+    
+    def _serialize_notification_data(self, data: Any) -> Any:
+        """Serializa recursivamente dados de notificação, convertendo datetime para strings"""
+        if isinstance(data, datetime):
+            return data.isoformat()
+        elif isinstance(data, dict):
+            result = {}
+            for key, value in data.items():
+                # Pular campos internos de controle
+                if key in ['created_at']:
+                    continue
+                result[key] = self._serialize_notification_data(value)
+            return result
+        elif isinstance(data, list):
+            return [self._serialize_notification_data(item) for item in data]
+        else:
+            return data
     
     def _check_notification_removals(self):
         """Verifica se notificações foram removidas pelo usuário (polling/listener)"""
