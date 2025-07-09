@@ -4,3 +4,6 @@ mqtt_project.log
 # config.yaml
 logging.conf
 coral-ring-463120-e6-1e914ca7754c.json
+firebase-config.json
+.env
+*.json
