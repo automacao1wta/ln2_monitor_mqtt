@@ -69,7 +69,7 @@ class MessageProcessor:
                 # Usar credenciais das variáveis de ambiente
                 firebase_credentials = {
                     "type": "service_account",
-                    "project_id": os.getenv("FIREBASE_PROJECT_ID", "ln2monitor-flutter"),
+                    "project_id": os.getenv("FIREBASE_PROJECT_ID", "coral-ring-463120-e6"),
                     "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
                     "private_key": os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n'),
                     "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
@@ -263,6 +263,7 @@ class MessageProcessor:
             # Data formatada para a coleção (formato YYYY-MM-DD)
             now = datetime.now()
             formatted_date = now.strftime('%Y-%m-%d')
+            formatted_time = now.strftime('%H-%M-%S')
             
             # Extrair e converter os valores específicos solicitados
             def safe_float_convert(val):
@@ -287,14 +288,17 @@ class MessageProcessor:
             # Remover valores None para não salvar campos vazios
             firestore_data = {k: v for k, v in firestore_data.items() if v is not None}
             
-            # Caminho da coleção: equipamentID > data > formattedDate > documento com timestamp
-            doc_ref = self.firestore_db.collection(equipment_id).doc('data').collection(formatted_date).doc()
+            # Estrutura: LN2-00002 (Collection) > data (Document) > 2025-06-09 (Collection) > 09-45-00 (Document) > firestore_data
+            collection_ref = self.firestore_db.collection(equipment_id)
+            data_doc_ref = collection_ref.document('data')
+            date_collection_ref = data_doc_ref.collection(formatted_date)
+            time_doc_ref = date_collection_ref.document(formatted_time)
             
             # Salvar no Firestore
-            doc_ref.set(firestore_data)
+            time_doc_ref.set(firestore_data)
             
-            self.logger.info(f"Dados salvos no Firestore para {equipment_id} em {formatted_date}: {firestore_data}")
-            print(f"Mensagem publicada no Firestore para o beacon {equipment_id} em {formatted_date}")
+            self.logger.info(f"Dados salvos no Firestore: {equipment_id}/data/{formatted_date}/{formatted_time} - {firestore_data}")
+            print(f"Mensagem publicada no Firestore para o beacon {equipment_id} em {formatted_date} às {formatted_time}")
             
         except Exception as e:
             self.logger.error(f"Erro ao salvar no Firestore: {e}")
