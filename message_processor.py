@@ -11,7 +11,7 @@ import psycopg2
 import psycopg2
 psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, db
 from dotenv import load_dotenv
 
 # Carregar variáveis de ambiente do arquivo .env
@@ -86,12 +86,23 @@ class MessageProcessor:
                     raise ValueError("Credenciais do Firebase não encontradas nas variáveis de ambiente")
                 
                 cred = credentials.Certificate(firebase_credentials)
-                firebase_admin.initialize_app(cred)
+                firebase_admin.initialize_app(cred, {
+                    'databaseURL': 'https://ln2monitor-flutter-default-rtdb.firebaseio.com/'
+                })
             self.firestore_db = firestore.client()
-            self.logger.info("Conectado ao Firestore com sucesso")
+            self.realtime_db = db.reference()
+            self.logger.info("Conectado ao Firestore e Realtime Database com sucesso")
         except Exception as e:
-            self.logger.error(f"Erro ao conectar ao Firestore: {e}")
+            self.logger.error(f"Erro ao conectar ao Firebase: {e}")
             self.firestore_db = None
+            self.realtime_db = None
+
+        # Cache de MAC para Equipment ID
+        self.mac_cache_file = "mac_equipment_cache.json"
+        self.mac_cache = {}
+        self.cache_update_interval = timedelta(hours=1)  # Atualizar cache a cada 1 hora
+        self.last_cache_update = datetime.min
+        self._load_mac_cache()
 
     def save_message_to_db(self, topic, message_dict):
         import math
@@ -254,10 +265,24 @@ class MessageProcessor:
             return
             
         try:
-            # Extrair beacon_serial (equipamentID)
-            equipment_id = message_dict.get('beacon_serial')
-            if not equipment_id:
+            # Extrair beacon_serial e converter para MAC
+            beacon_serial = message_dict.get('beacon_serial')
+            if not beacon_serial:
                 self.logger.error("Beacon serial não encontrado para salvar no Firestore")
+                return
+            
+            # Converter beacon_serial para formato MAC
+            mac_equipament = self._format_mac_address(beacon_serial)
+            
+            # Atualizar cache periodicamente
+            if self._should_update_cache():
+                self.logger.info("Atualizando cache de equipamentos...")
+                self._update_mac_cache_from_realtime_db()
+            
+            # Buscar Equipment ID pelo MAC
+            equipment_id = self._get_equipment_id_by_mac(mac_equipament)
+            if not equipment_id:
+                self.logger.error(f"Equipment ID não encontrado para MAC {mac_equipament} (beacon_serial: {beacon_serial})")
                 return
             
             # Data formatada para a coleção (formato YYYY-MM-DD)
@@ -283,12 +308,13 @@ class MessageProcessor:
                 'vBat': safe_float_convert(message_dict.get('vbat_mv')) / 1000.0 if message_dict.get('vbat_mv') else None,  # Converter mV para V
                 'timestamp': datetime.now(timezone.utc),  # Timestamp UTC da mensagem
                 'package_id': message_dict.get('package_id'),  # ID do pacote para referência
+                'mac_equipament': mac_equipament,  # MAC do equipamento
             }
             
             # Remover valores None para não salvar campos vazios
             firestore_data = {k: v for k, v in firestore_data.items() if v is not None}
             
-            # Estrutura: LN2-00002 (Collection) > data (Document) > 2025-06-09 (Collection) > 09-45-00 (Document) > firestore_data
+            # Estrutura: Equipment_ID (Collection) > data (Document) > 2025-06-09 (Collection) > 09-45-00 (Document) > firestore_data
             collection_ref = self.firestore_db.collection(equipment_id)
             data_doc_ref = collection_ref.document('data')
             date_collection_ref = data_doc_ref.collection(formatted_date)
@@ -297,8 +323,8 @@ class MessageProcessor:
             # Salvar no Firestore
             time_doc_ref.set(firestore_data)
             
-            self.logger.info(f"Dados salvos no Firestore: {equipment_id}/data/{formatted_date}/{formatted_time} - {firestore_data}")
-            print(f"Mensagem publicada no Firestore para o beacon {equipment_id} em {formatted_date} às {formatted_time}")
+            self.logger.info(f"Dados salvos no Firestore: {equipment_id}/data/{formatted_date}/{formatted_time} - MAC: {mac_equipament}")
+            print(f"Mensagem publicada no Firestore para {equipment_id} (MAC: {mac_equipament}) em {formatted_date} às {formatted_time}")
             
         except Exception as e:
             self.logger.error(f"Erro ao salvar no Firestore: {e}")
@@ -565,3 +591,132 @@ class MessageProcessor:
 
             except Exception as e:
                 self.logger.exception("Error in message processing loop: %s", str(e))
+
+    def _load_mac_cache(self):
+        """Carrega o cache de MAC para Equipment ID do arquivo local"""
+        try:
+            if os.path.exists(self.mac_cache_file):
+                with open(self.mac_cache_file, 'r') as f:
+                    cache_data = json.load(f)
+                    self.mac_cache = cache_data.get('mac_mapping', {})
+                    self.last_cache_update = datetime.fromisoformat(cache_data.get('last_update', datetime.min.isoformat()))
+                    self.logger.info(f"Cache MAC carregado: {len(self.mac_cache)} equipamentos")
+            else:
+                self.logger.info("Arquivo de cache MAC não encontrado, será criado")
+        except Exception as e:
+            self.logger.error(f"Erro ao carregar cache MAC: {e}")
+            self.mac_cache = {}
+
+    def _save_mac_cache(self):
+        """Salva o cache de MAC para Equipment ID no arquivo local"""
+        try:
+            cache_data = {
+                'mac_mapping': self.mac_cache,
+                'last_update': datetime.now().isoformat()
+            }
+            with open(self.mac_cache_file, 'w') as f:
+                json.dump(cache_data, f, indent=2)
+            self.logger.info(f"Cache MAC salvo: {len(self.mac_cache)} equipamentos")
+        except Exception as e:
+            self.logger.error(f"Erro ao salvar cache MAC: {e}")
+
+    def _format_mac_address(self, beacon_serial):
+        """Converte beacon_serial (90395E0AE8A7) para formato MAC (90:39:5E:0A:E8:A7)"""
+        if len(beacon_serial) == 12:
+            return ':'.join([beacon_serial[i:i+2] for i in range(0, 12, 2)])
+        return beacon_serial
+
+    def _should_update_cache(self):
+        """Verifica se o cache deve ser atualizado"""
+        return datetime.now() - self.last_cache_update >= self.cache_update_interval
+
+    def _update_mac_cache_from_realtime_db(self):
+        """Atualiza o cache consultando apenas equipamentos não conhecidos no Realtime Database"""
+        if not self.realtime_db:
+            self.logger.error("Realtime Database não disponível para atualização do cache")
+            return
+
+        try:
+            # Buscar todos os equipamentos do Realtime Database
+            all_equipment = self.realtime_db.get()
+            if not all_equipment:
+                self.logger.warning("Nenhum equipamento encontrado no Realtime Database")
+                return
+
+            new_mappings = 0
+            updated_mappings = 0
+
+            for equipment_id in all_equipment.keys():
+                if equipment_id.startswith('LN2-'):
+                    try:
+                        # Verificar se já temos esse equipamento no cache
+                        equipment_data = all_equipment[equipment_id]
+                        if isinstance(equipment_data, dict) and 'STATUS' in equipment_data:
+                            status = equipment_data['STATUS']
+                            if isinstance(status, dict) and 'mac' in status:
+                                mac_address = status['mac']
+                                
+                                # Verificar se o MAC mudou ou é novo
+                                if mac_address not in self.mac_cache or self.mac_cache[mac_address] != equipment_id:
+                                    if mac_address in self.mac_cache:
+                                        updated_mappings += 1
+                                    else:
+                                        new_mappings += 1
+                                    
+                                    self.mac_cache[mac_address] = equipment_id
+                                    self.logger.info(f"Mapeamento atualizado: {mac_address} -> {equipment_id}")
+                    
+                    except Exception as e:
+                        self.logger.error(f"Erro ao processar equipamento {equipment_id}: {e}")
+
+            # Salvar cache atualizado
+            self._save_mac_cache()
+            self.last_cache_update = datetime.now()
+            
+            self.logger.info(f"Cache atualizado: {new_mappings} novos, {updated_mappings} atualizados. Total: {len(self.mac_cache)}")
+
+        except Exception as e:
+            self.logger.error(f"Erro ao atualizar cache do Realtime Database: {e}")
+
+    def _get_equipment_id_by_mac(self, mac_address):
+        """Busca o Equipment ID pelo MAC address, usando cache otimizado"""
+        # Verificar se está no cache
+        if mac_address in self.mac_cache:
+            return self.mac_cache[mac_address]
+
+        # MAC não encontrado no cache - buscar no Realtime Database
+        if not self.realtime_db:
+            self.logger.error("Realtime Database não disponível para busca de equipamento")
+            return None
+
+        try:
+            self.logger.info(f"Buscando equipamento para MAC {mac_address} no Realtime Database...")
+            
+            # Buscar todos os equipamentos (otimização: poderia ser feita uma query mais específica)
+            all_equipment = self.realtime_db.get()
+            if not all_equipment:
+                return None
+
+            for equipment_id in all_equipment.keys():
+                if equipment_id.startswith('LN2-'):
+                    try:
+                        equipment_data = all_equipment[equipment_id]
+                        if isinstance(equipment_data, dict) and 'STATUS' in equipment_data:
+                            status = equipment_data['STATUS']
+                            if isinstance(status, dict) and 'mac' in status:
+                                stored_mac = status['mac']
+                                if stored_mac == mac_address:
+                                    # Encontrado! Adicionar ao cache
+                                    self.mac_cache[mac_address] = equipment_id
+                                    self._save_mac_cache()
+                                    self.logger.info(f"Equipamento encontrado: {mac_address} -> {equipment_id}")
+                                    return equipment_id
+                    except Exception as e:
+                        self.logger.error(f"Erro ao verificar equipamento {equipment_id}: {e}")
+
+            self.logger.warning(f"Equipamento não encontrado para MAC {mac_address}")
+            return None
+
+        except Exception as e:
+            self.logger.error(f"Erro ao buscar equipamento por MAC: {e}")
+            return None
