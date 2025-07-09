@@ -1,0 +1,23 @@
+{
+  "mode": "listener",
+  "polling_interval_minutes": 10,
+  "connection_timeout_hours": 1.0,
+  "connection_check_enabled": true,
+  "max_notifications_per_device_per_hour": 20,
+  "recovery_notifications_enabled": true,
+  "group_notifications_same_device": true,
+  "max_group_delay_seconds": 30,
+  "normal_status_values": {
+    "ln2_level_status": "04",
+    "ln2_angle_status": "04",
+    "ln2_battery_status": "04",
+    "ln2_foam_status": "08"
+  },
+  "field_severities": {
+    "ln2_level_status": "high",
+    "ln2_angle_status": "low",
+    "ln2_battery_status": "high",
+    "ln2_foam_status": "low",
+    "connection": "high"
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "KEYS" : {
+    "100-3fa1dd00" : "inativo",
+    "100-bed50100" : "inativo",
+    "100-d5687f00" : "inativo"
+  },
+  "REALTIME" : {
+    "tank" : "Botijão 1",
+    "LN2Level" : false,
+    "tempPT100" : 36.5,
+    "tempAmbient" : 38.5,
+    "vBat" : 2.8 ,
+    "pBat" : 80,
+    "deviceHealth" : "Good",
+    "message" : "none",
+    "Redundancy": "Good",
+    "cover" : false,
+    "vibration" : true,
+    "humidity" : 45
+  },
+  "SETTINGS" : {
+    "plan" : "free"
+  },
+  "STATUS" : {
+    "lastTX" : "263309220424",
+    "deviceConnected" : false,
+    "rssi" : 0,
+    "versionFW" : "v0.0.0.1",
+    "mac" : "CC:5C:C7:44:7C",
+    "calibrated" : 0
+  },
+  "REDUNDANCY" : {
+    "status" : "good/bad",
+    "group" : "name",    
+    "enGroup" : "name",        
+    "enPartners" : "name",   
+    "partner1" : {
+      "name" : "LN2-XXXXX",
+      "status" : "good/bad",
+      "diag" : "none"
+    },
+    "partner2" : {
+      "name" : "LN2-XXXXX",
+      "status" : "good/bad",
+      "diag" : "none"
+    }
+  },
+  "NOTIFICATIONS": {
+    "LN2Level_id01": {
+      "type": "LN2Level",
+      "message": "Nível de LN2 abaixo de 20%",
+      "deviceId": "LN2-00100",
+      "timestamp_emitted": "2025-06-09T12:45:00Z",
+      "status": "active",
+      "severity": "high",
+      "view_status": "unread" 
+    },
+    "LN2Level_id02": {
+      "type": "LN2Level",
+      "message": "Nível de LN2 abaixo de 20%",
+      "deviceId": "LN2-00100",
+      "timestamp_emitted": "2025-06-09T12:45:00Z",
+      "status": "active",
+      "severity": "high",
+      "view_status": "unread" 
+    },
+    "cover_id01": {
+      "type": "cover",
+      "message": "Tampa foi removida",
+      "deviceId": "LN2-00100",
+      "timestamp_emitted": "2025-06-09T12:47:30Z",
+      "status": "active",
+      "severity": "medium",
+      "view_status": "unread" 
+    },
+    "vibration_id01": {
+      "type": "vibration",
+      "message": "Detecção de vibração anormal",
+      "deviceId": "LN2-00100",
+      "timestamp_emitted": "2025-06-09T12:50:15Z",
+      "status": "active",
+      "severity": "medium",
+      "view_status": "unread" 
+    },
+    "lastTX_id01": {
+      "type": "lastTX",
+      "message": "Sem comunicação com o dispositivo há mais de 10 minutos",
+      "deviceId": "LN2-00100",
+      "timestamp_emitted": "2025-06-09T12:55:00Z",
+      "status": "active",
+      "severity": "high",
+      "view_status": "unread" 
+    }
+  }
+}
