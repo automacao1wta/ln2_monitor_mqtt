@@ -11,7 +11,7 @@
     "ln2_level_status": "04",
     "ln2_angle_status": "04",
     "ln2_battery_status": "04",
-    "ln2_foam_status": "08"
+    "ln2_foam_status": "04"
   },
   "field_severities": {
     "ln2_level_status": "high",

@@ -134,6 +134,16 @@ class NotificationHandler:
                     self.config.polling_interval_minutes = config_data['polling_interval_minutes']
                 if 'connection_timeout_hours' in config_data:
                     self.config.connection_timeout_hours = config_data['connection_timeout_hours']
+                if 'connection_check_enabled' in config_data:
+                    self.config.connection_check_enabled = config_data['connection_check_enabled']
+                if 'max_notifications_per_device_per_hour' in config_data:
+                    self.config.max_notifications_per_device_per_hour = config_data['max_notifications_per_device_per_hour']
+                if 'recovery_notifications_enabled' in config_data:
+                    self.config.recovery_notifications_enabled = config_data['recovery_notifications_enabled']
+                if 'group_notifications_same_device' in config_data:
+                    self.config.group_notifications_same_device = config_data['group_notifications_same_device']
+                if 'max_group_delay_seconds' in config_data:
+                    self.config.max_group_delay_seconds = config_data['max_group_delay_seconds']
                 if 'normal_status_values' in config_data:
                     self.config.normal_status_values.update(config_data['normal_status_values'])
                 if 'field_severities' in config_data:
@@ -143,6 +153,7 @@ class NotificationHandler:
                     self.config.field_severities.update(severities)
                 
                 self.logger.info(f"Configurações carregadas de {config_file}")
+                self.logger.info(f"Rate limit configurado: {self.config.max_notifications_per_device_per_hour} notificações/hora")
         except Exception as e:
             self.logger.error(f"Erro ao carregar configurações: {e}")
     
@@ -326,8 +337,9 @@ class NotificationHandler:
                                   normal_value: str, last_value: str) -> Optional[Dict[str, Any]]:
         """Cria notificação baseada em mudança de status"""
         
-        # Verificar rate limiting
+        # Verificar rate limiting ANTES de qualquer processamento
         if not self._check_rate_limit(equipment_id, field_name):
+            self.logger.debug(f"Rate limit bloqueou notificação para {equipment_id} ({field_name})")
             return None
         
         # Normalizar valores para comparação
@@ -499,19 +511,17 @@ class NotificationHandler:
             return True
         
         current_time = datetime.now()
-        last_notification = device_status.last_notification_timestamps.get(notification_type)
+        hour_ago = current_time - timedelta(hours=1)
         
-        if last_notification:
-            # Contar notificações na última hora
-            hour_ago = current_time - timedelta(hours=1)
-            notifications_last_hour = sum(
-                1 for timestamp in device_status.last_notification_timestamps.values()
-                if timestamp > hour_ago
-            )
-            
-            if notifications_last_hour >= self.config.max_notifications_per_device_per_hour:
-                self.logger.warning(f"Rate limit atingido para {equipment_id}: {notifications_last_hour} notificações na última hora")
-                return False
+        # Contar TODAS as notificações na última hora (independente do tipo)
+        notifications_last_hour = sum(
+            1 for timestamp in device_status.last_notification_timestamps.values()
+            if timestamp > hour_ago
+        )
+        
+        if notifications_last_hour >= self.config.max_notifications_per_device_per_hour:
+            self.logger.warning(f"Rate limit atingido para {equipment_id}: {notifications_last_hour} notificações na última hora (limite: {self.config.max_notifications_per_device_per_hour})")
+            return False
         
         return True
     
@@ -686,9 +696,14 @@ class NotificationHandler:
         # Converter para string se necessário
         value_str = str(value)
         
-        # Se contém " - ", extrair apenas o código
+        # Se contém " - ", extrair apenas o código (já processado pelo message_processor)
         if " - " in value_str:
-            value_str = value_str.split(" - ")[0]
+            code_str = value_str.split(" - ")[0]
+            try:
+                decimal_value = int(code_str)
+                return f"{decimal_value:02d}"  # Formato com 2 dígitos: 04, 10, etc.
+            except ValueError:
+                pass
         
         # Se é hexadecimal (2 caracteres), converter para decimal e depois para string com 2 dígitos
         if len(value_str) == 2 and all(c in '0123456789ABCDEFabcdef' for c in value_str):

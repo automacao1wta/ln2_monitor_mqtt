@@ -259,7 +259,7 @@ class MessageProcessor:
             # Debug: conferir número de argumentos e tipos
             # print(len(values), values)
             # print("JSON enviado:", json.dumps(message_dict, indent=4, ensure_ascii=False))
-            print("Valores enviados para o banco:", values)
+            # print("Valores enviados para o banco:", values)
             # print("Nº de %s no SQL:", sql.count('%s'))
             # print("Nº de valores:", len(values))
             self.db_cursor.execute(sql, list(values))
@@ -455,7 +455,7 @@ class MessageProcessor:
                 parsed_hex[k] = int(v, 16) / 1000
             elif 'tempa' in k:
                 parsed_hex[k] = int(v, 16) / 100
-            elif k.endswith('Status'):
+            elif k.endswith('Status') or 'status' in k.lower():
                 try:
                     # Tenta converter para int (pode ser signed ou unsigned)
                     status_val = int(v, 16)
