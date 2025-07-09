@@ -2,6 +2,8 @@ services:
   mqtt-client:
     container_name: mqtt_client
     build: .
+    env_file:
+      - .env
     volumes:
       - ./output:/app/output:rw
       - ./mqtt_project.log:/app/mqtt_project.log:rw

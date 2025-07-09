@@ -10,6 +10,12 @@ import struct
 import psycopg2
 import psycopg2
 psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
+import firebase_admin
+from firebase_admin import credentials, firestore
+from dotenv import load_dotenv
+
+# Carregar variáveis de ambiente do arquivo .env
+load_dotenv()
 
 
 # Load constants from config file
@@ -56,6 +62,36 @@ class MessageProcessor:
             self.logger.error(f"Erro ao conectar ao PostgreSQL: {e}")
             self.db_conn = None
             self.db_cursor = None
+
+        # Firestore connection
+        try:
+            if not firebase_admin._apps:
+                # Usar credenciais das variáveis de ambiente
+                firebase_credentials = {
+                    "type": "service_account",
+                    "project_id": os.getenv("FIREBASE_PROJECT_ID", "ln2monitor-flutter"),
+                    "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
+                    "private_key": os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n'),
+                    "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
+                    "client_id": os.getenv("FIREBASE_CLIENT_ID"),
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL"),
+                    "universe_domain": "googleapis.com"
+                }
+                
+                # Verificar se as credenciais estão disponíveis
+                if not firebase_credentials["private_key_id"] or not firebase_credentials["private_key"]:
+                    raise ValueError("Credenciais do Firebase não encontradas nas variáveis de ambiente")
+                
+                cred = credentials.Certificate(firebase_credentials)
+                firebase_admin.initialize_app(cred)
+            self.firestore_db = firestore.client()
+            self.logger.info("Conectado ao Firestore com sucesso")
+        except Exception as e:
+            self.logger.error(f"Erro ao conectar ao Firestore: {e}")
+            self.firestore_db = None
 
     def save_message_to_db(self, topic, message_dict):
         import math
@@ -205,6 +241,63 @@ class MessageProcessor:
             print(f"Mensagem publicada no SQL para o beacon {message_dict.get('beacon_serial')} (package_id={message_dict.get('package_id')}) no tópico '{topic}' em {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         except Exception as e:
             self.logger.error(f"Erro ao inserir no banco: {e}")
+        
+        # Também salvar no Firestore
+        self.save_message_to_firestore(topic, message_dict)
+        
+    def save_message_to_firestore(self, topic, message_dict):
+        """
+        Salva dados específicos no Firestore seguindo a estrutura solicitada
+        """
+        if not self.firestore_db:
+            self.logger.error("Sem conexão com o Firestore!")
+            return
+            
+        try:
+            # Extrair beacon_serial (equipamentID)
+            equipment_id = message_dict.get('beacon_serial')
+            if not equipment_id:
+                self.logger.error("Beacon serial não encontrado para salvar no Firestore")
+                return
+            
+            # Data formatada para a coleção (formato YYYY-MM-DD)
+            now = datetime.now()
+            formatted_date = now.strftime('%Y-%m-%d')
+            
+            # Extrair e converter os valores específicos solicitados
+            def safe_float_convert(val):
+                try:
+                    if val is None:
+                        return None
+                    return float(val)
+                except (ValueError, TypeError):
+                    return None
+            
+            # Mapeamento dos dados para o Firestore
+            firestore_data = {
+                'humidity': None,  # Não temos esse campo nos dados atuais, definindo como None
+                'pBat': safe_float_convert(message_dict.get('batt_percent')),  # Porcentagem da bateria
+                'tempAmbient': safe_float_convert(message_dict.get('temp_ambient')),  # Temperatura ambiente
+                'tempPT100': safe_float_convert(message_dict.get('temp_pt100')),  # Temperatura PT100
+                'vBat': safe_float_convert(message_dict.get('vbat_mv')) / 1000.0 if message_dict.get('vbat_mv') else None,  # Converter mV para V
+                'timestamp': now,  # Timestamp da mensagem
+                'package_id': message_dict.get('package_id'),  # ID do pacote para referência
+            }
+            
+            # Remover valores None para não salvar campos vazios
+            firestore_data = {k: v for k, v in firestore_data.items() if v is not None}
+            
+            # Caminho da coleção: equipamentID > data > formattedDate > documento com timestamp
+            doc_ref = self.firestore_db.collection(equipment_id).doc('data').collection(formatted_date).doc()
+            
+            # Salvar no Firestore
+            doc_ref.set(firestore_data)
+            
+            self.logger.info(f"Dados salvos no Firestore para {equipment_id} em {formatted_date}: {firestore_data}")
+            print(f"Mensagem publicada no Firestore para o beacon {equipment_id} em {formatted_date}")
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao salvar no Firestore: {e}")
         
     def _twos_comp(self, val, bits):
         """compute the 2's complement of int value val"""
