@@ -13,6 +13,7 @@ psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
 import firebase_admin
 from firebase_admin import credentials, firestore, db
 from dotenv import load_dotenv
+from notification_handler import NotificationHandler, NotificationConfig
 
 # Carregar variáveis de ambiente do arquivo .env
 load_dotenv()
@@ -103,6 +104,20 @@ class MessageProcessor:
         self.cache_update_interval = timedelta(hours=1)  # Atualizar cache a cada 1 hora
         self.last_cache_update = datetime.min
         self._load_mac_cache()
+
+        # Inicializar sistema de notificações
+        notification_config = NotificationConfig()
+        self.notification_handler = NotificationHandler(
+            config=notification_config,
+            realtime_db=self.realtime_db,
+            message_processor=self  # Passar referência para acessar _get_status_comment
+        )
+        # Iniciar o sistema de notificações
+        if self.realtime_db:
+            self.notification_handler.start()
+            self.logger.info("Sistema de notificações iniciado")
+        else:
+            self.logger.warning("Sistema de notificações não iniciado - Realtime Database indisponível")
 
     def save_message_to_db(self, topic, message_dict):
         import math
@@ -325,6 +340,10 @@ class MessageProcessor:
             
             self.logger.info(f"Dados salvos no Firestore: {equipment_id}/data/{formatted_date}/{formatted_time} - MAC: {mac_equipament}")
             print(f"Mensagem publicada no Firestore para {equipment_id} (MAC: {mac_equipament}) em {formatted_date} às {formatted_time}")
+            
+            # Processar notificações após salvar no Firestore
+            if hasattr(self, 'notification_handler') and self.notification_handler:
+                self.notification_handler.process_mqtt_data(equipment_id, message_dict)
             
         except Exception as e:
             self.logger.error(f"Erro ao salvar no Firestore: {e}")
@@ -720,3 +739,64 @@ class MessageProcessor:
         except Exception as e:
             self.logger.error(f"Erro ao buscar equipamento por MAC: {e}")
             return None
+
+    def cleanup(self):
+        """Limpa recursos ao finalizar o MessageProcessor"""
+        try:
+            # Parar sistema de notificações
+            if hasattr(self, 'notification_handler') and self.notification_handler:
+                self.notification_handler.stop()
+                self.logger.info("Sistema de notificações finalizado")
+            
+            # Fechar conexões do banco
+            if self.db_cursor:
+                self.db_cursor.close()
+            if self.db_conn:
+                self.db_conn.close()
+                self.logger.info("Conexão PostgreSQL fechada")
+                
+        except Exception as e:
+            self.logger.error(f"Erro durante cleanup: {e}")
+
+    def __del__(self):
+        """Destructor para garantir cleanup"""
+        self.cleanup()
+
+    # Métodos para gerenciar o sistema de notificações
+    
+    def get_notification_status(self):
+        """Retorna status do sistema de notificações"""
+        if hasattr(self, 'notification_handler') and self.notification_handler:
+            return self.notification_handler.get_status_summary()
+        return {"status": "not_initialized"}
+    
+    def toggle_notification_mode(self, mode="polling"):
+        """Alterna modo de notificação entre 'polling' e 'listener'"""
+        if hasattr(self, 'notification_handler') and self.notification_handler:
+            from notification_handler import NotificationMode
+            new_mode = NotificationMode.POLLING if mode == "polling" else NotificationMode.LISTENER
+            self.notification_handler.toggle_mode(new_mode)
+            self.logger.info(f"Modo de notificação alterado para: {mode}")
+            return True
+        return False
+    
+    def update_notification_config(self, **kwargs):
+        """Atualiza configurações do sistema de notificações"""
+        if hasattr(self, 'notification_handler') and self.notification_handler:
+            self.notification_handler.update_config(**kwargs)
+            self.logger.info(f"Configurações de notificação atualizadas: {kwargs}")
+            return True
+        return False
+    
+    def stop_notifications(self):
+        """Para o sistema de notificações"""
+        if hasattr(self, 'notification_handler') and self.notification_handler:
+            self.notification_handler.stop()
+            self.logger.info("Sistema de notificações parado")
+    
+    def restart_notifications(self):
+        """Reinicia o sistema de notificações"""
+        if hasattr(self, 'notification_handler') and self.notification_handler:
+            self.notification_handler.stop()
+            self.notification_handler.start()
+            self.logger.info("Sistema de notificações reiniciado")

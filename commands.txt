@@ -104,3 +104,5 @@ CREATE TABLE mqtt_messages (
     "ln2_level_status": "04",
     "ln2_angle_status": "04",
     "ln2_battery_status": "04",
+    "ln2_foam_status": "08",    
+    
