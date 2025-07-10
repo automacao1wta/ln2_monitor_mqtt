@@ -152,10 +152,10 @@ class NotificationHandler:
                         severities[field] = NotificationSeverity(sev)
                     self.config.field_severities.update(severities)
                 
-                self.logger.info(f"Configurações carregadas de {config_file}")
-                self.logger.info(f"Rate limit configurado: {self.config.max_notifications_per_device_per_hour} notificações/hora")
+                self.logger.info(f"Configurations loaded from {config_file}")
+                self.logger.info(f"Rate limit configured: {self.config.max_notifications_per_device_per_hour} notifications/hour")
         except Exception as e:
-            self.logger.error(f"Erro ao carregar configurações: {e}")
+            self.logger.error(f"Error loading configurations: {e}")
     
     def save_config_to_file(self):
         """Salva configurações atuais no arquivo"""
@@ -177,14 +177,14 @@ class NotificationHandler:
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(config_data, f, indent=2, ensure_ascii=False)
             
-            self.logger.info(f"Configurações salvas em {config_file}")
+            self.logger.info(f"Configurations saved to {config_file}")
         except Exception as e:
-            self.logger.error(f"Erro ao salvar configurações: {e}")
+            self.logger.error(f"Error saving configurations: {e}")
     
     def start(self):
         """Inicia o handler de notificações"""
         if not self.realtime_db:
-            self.logger.error("Realtime Database não configurado")
+            self.logger.error("Realtime Database not configured")
             return
         
         # Iniciar thread de agrupamento
@@ -229,20 +229,20 @@ class NotificationHandler:
                 self._check_notification_removals()
                 time.sleep(self.config.polling_interval_minutes * 60)
             except Exception as e:
-                self.logger.error(f"Erro no polling worker: {e}")
+                self.logger.error(f"Error in polling worker: {e}")
                 time.sleep(30)  # Espera 30s antes de tentar novamente
     
     def _listener_worker(self):
         """Worker para modo listener"""
         # TODO: Implementar Firebase listener
         # Por enquanto, fazer polling mais frequente como fallback
-        self.logger.warning("Listener mode não implementado ainda, usando polling rápido como fallback")
+        self.logger.warning("Listener mode not implemented yet, using fast polling as fallback")
         while not self._stop_event.is_set():
             try:
                 self._check_notification_removals()
                 time.sleep(60)  # Check a cada minuto no modo listener
             except Exception as e:
-                self.logger.error(f"Erro no listener worker: {e}")
+                self.logger.error(f"Error in listener worker: {e}")
                 time.sleep(30)
     
     def _grouping_worker(self):
@@ -262,7 +262,7 @@ class NotificationHandler:
                 
                 time.sleep(5)  # Check a cada 5 segundos
             except Exception as e:
-                self.logger.error(f"Erro no grouping worker: {e}")
+                self.logger.error(f"Error in grouping worker: {e}")
                 time.sleep(10)
     
     def process_mqtt_data(self, equipment_id: str, message_dict: Dict[str, Any]):
@@ -339,7 +339,7 @@ class NotificationHandler:
         
         # Verificar rate limiting ANTES de qualquer processamento
         if not self._check_rate_limit(equipment_id, field_name):
-            self.logger.debug(f"Rate limit bloqueou notificação para {equipment_id} ({field_name})")
+            self.logger.debug(f"Rate limit blocked notification for {equipment_id} ({field_name})")
             return None
         
         # Normalizar valores para comparação
@@ -414,19 +414,18 @@ class NotificationHandler:
                 if not was_disconnected:  # Só notificar na primeira vez
                     device_status.last_status_values['connection_status'] = 'disconnected'
                     
-                    if self._check_rate_limit(equipment_id, 'connection'):
-                        return {
-                            "type": "connection_lost",
-                            "field_name": "connection",
-                            "message": f"Sem comunicação com o dispositivo há {time_diff_hours:.1f} horas",
-                            "deviceId": equipment_id,
-                            "last_seen": last_tx_time.isoformat(),
-                            "hours_offline": round(time_diff_hours, 1),
-                            "severity": self.config.field_severities.get('connection', NotificationSeverity.HIGH).value,
-                            "timestamp_emitted": current_time.isoformat(),
-                            "status": "active",
-                            "view_status": "unread"
-                        }
+                    if self._check_rate_limit(equipment_id, 'connection'):                    return {
+                        "type": "connection_lost",
+                        "field_name": "connection",
+                        "message": f"No communication with device for {time_diff_hours:.1f} hours",
+                        "deviceId": equipment_id,
+                        "last_seen": last_tx_time.isoformat(),
+                        "hours_offline": round(time_diff_hours, 1),
+                        "severity": self.config.field_severities.get('connection', NotificationSeverity.HIGH).value,
+                        "timestamp_emitted": current_time.isoformat(),
+                        "status": "active",
+                        "view_status": "unread"
+                    }
             else:
                 # Dispositivo conectado
                 if was_disconnected and self.config.recovery_notifications_enabled:
@@ -435,7 +434,7 @@ class NotificationHandler:
                     return {
                         "type": "connection_recovered",
                         "field_name": "connection",
-                        "message": "Comunicação com o dispositivo foi restaurada",
+                        "message": "Communication with device has been restored",
                         "deviceId": equipment_id,
                         "severity": self.config.field_severities.get('connection', NotificationSeverity.HIGH).value,
                         "timestamp_emitted": current_time.isoformat(),
@@ -444,7 +443,7 @@ class NotificationHandler:
                     }
         
         except Exception as e:
-            self.logger.error(f"Erro ao verificar conexão para {equipment_id}: {e}")
+            self.logger.error(f"Error checking connection for {equipment_id}: {e}")
         
         return None
     
@@ -463,10 +462,10 @@ class NotificationHandler:
             description = f"Status {value}"
         
         field_messages = {
-            "ln2_level_status": f"Nível de LN2: {description}",
-            "ln2_angle_status": f"Ângulo do dispositivo: {description}",
-            "ln2_battery_status": f"Status da bateria: {description}",
-            "ln2_foam_status": f"Status da espuma: {description}",
+            "ln2_level_status": f"LN2 Level: {description}",
+            "ln2_angle_status": f"Device angle: {description}",
+            "ln2_battery_status": f"Battery status: {description}",
+            "ln2_foam_status": f"Foam status: {description}",
         }
         
         return field_messages.get(field_name, f"{field_name}: {description}")
@@ -474,10 +473,10 @@ class NotificationHandler:
     def _get_status_recovery_message(self, field_name: str) -> str:
         """Gera mensagem de recuperação"""
         field_messages = {
-            "ln2_level_status": "Nível de LN2 normalizado",
-            "ln2_angle_status": "Ângulo do dispositivo normalizado",
-            "ln2_battery_status": "Status da bateria normalizado",
-            "ln2_foam_status": "Status da espuma normalizado",
+            "ln2_level_status": "LN2 level normalized",
+            "ln2_angle_status": "Device angle normalized",
+            "ln2_battery_status": "Battery status normalized",
+            "ln2_foam_status": "Foam status normalized",
         }
         
         return field_messages.get(field_name, f"{field_name} normalizado")
@@ -492,15 +491,15 @@ class NotificationHandler:
                 current_desc = self.message_processor._get_status_comment(int(current_value)).split(" - ", 1)[-1]
                 previous_desc = self.message_processor._get_status_comment(int(previous_value)).split(" - ", 1)[-1]
             except Exception as e:
-                self.logger.debug(f"Erro ao obter descrições: {e}")
+                self.logger.debug(f"Error getting descriptions: {e}")
                 current_desc = f"Status {current_value}"
                 previous_desc = f"Status {previous_value}"
         
         field_messages = {
-            "ln2_level_status": f"Nível de LN2 mudou: {previous_desc} → {current_desc}",
-            "ln2_angle_status": f"Ângulo mudou: {previous_desc} → {current_desc}",
-            "ln2_battery_status": f"Bateria mudou: {previous_desc} → {current_desc}",
-            "ln2_foam_status": f"Espuma mudou: {previous_desc} → {current_desc}",
+            "ln2_level_status": f"LN2 level changed: {previous_desc} → {current_desc}",
+            "ln2_angle_status": f"Angle changed: {previous_desc} → {current_desc}",
+            "ln2_battery_status": f"Battery changed: {previous_desc} → {current_desc}",
+            "ln2_foam_status": f"Foam changed: {previous_desc} → {current_desc}",
         }
         
         return field_messages.get(field_name, f"{field_name}: {previous_desc} → {current_desc}")
@@ -521,7 +520,7 @@ class NotificationHandler:
         )
         
         if notifications_last_hour >= self.config.max_notifications_per_device_per_hour:
-            self.logger.warning(f"Rate limit atingido para {equipment_id}: {notifications_last_hour} notificações na última hora (limite: {self.config.max_notifications_per_device_per_hour})")
+            self.logger.warning(f"Rate limit reached for {equipment_id}: {notifications_last_hour} notifications in the last hour (limit: {self.config.max_notifications_per_device_per_hour})")
             return False
         
         return True
@@ -552,7 +551,7 @@ class NotificationHandler:
         
         # Criar mensagem agrupada
         messages = [n['message'] for n in notifications]
-        grouped_message = f"Múltiplos alertas: {'; '.join(messages)}"
+        grouped_message = f"Multiple alerts: {'; '.join(messages)}"
         
         # Criar tipos agrupados
         types = [n['type'] for n in notifications]
@@ -576,7 +575,7 @@ class NotificationHandler:
         """Envia uma notificação para o Realtime Database"""
         
         if not self.realtime_db:
-            self.logger.error("Realtime Database não disponível")
+            self.logger.error("Realtime Database not available")
             return
         
         try:
@@ -603,7 +602,7 @@ class NotificationHandler:
             self.logger.info(f"Notificação enviada para {equipment_id}: {notification['type']} - {notification['message']}")
             
         except Exception as e:
-            self.logger.error(f"Erro ao enviar notificação para {equipment_id}: {e}")
+            self.logger.error(f"Error sending notification for {equipment_id}: {e}")
     
     def _serialize_notification_data(self, data: Any) -> Any:
         """Serializa recursivamente dados de notificação, convertendo datetime para strings"""
@@ -623,7 +622,7 @@ class NotificationHandler:
             return data
     
     def _check_notification_removals(self):
-        """Verifica se notificações foram removidas pelo usuário (polling/listener)"""
+        """Checks if notifications were removed by user (polling/listener)"""
         
         if not self.realtime_db:
             return
@@ -642,14 +641,14 @@ class NotificationHandler:
                     for removed_id in removed_ids:
                         removed_notification = self.active_notifications_cache[equipment_id].pop(removed_id, None)
                         if removed_notification:
-                            self.logger.info(f"Notificação removida pelo usuário: {equipment_id}/{removed_id}")
-                            # Aqui pode implementar lógica adicional quando notificação é removida
+                            self.logger.info(f"Notification removed by user: {equipment_id}/{removed_id}")
+                            # Here can implement additional logic when notification is removed
                 
                 except Exception as e:
-                    self.logger.error(f"Erro ao verificar remoções para {equipment_id}: {e}")
+                    self.logger.error(f"Error checking removals for {equipment_id}: {e}")
         
         except Exception as e:
-            self.logger.error(f"Erro geral ao verificar remoções de notificações: {e}")
+            self.logger.error(f"General error checking notification removals: {e}")
     
     def get_status_summary(self) -> Dict[str, Any]:
         """Retorna resumo do status do sistema de notificações"""

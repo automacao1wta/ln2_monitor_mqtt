@@ -6,7 +6,7 @@
   },
   "REALTIME" : {
     "tank" : "Botijão 1",
-    "LN2Level" : false,
+    "LN2Level" : "none",
     "tempPT100" : 36.5,
     "tempAmbient" : 38.5,
     "vBat" : 2.8 ,
@@ -14,7 +14,7 @@
     "deviceHealth" : "Good",
     "message" : "none",
     "Redundancy": "Good",
-    "cover" : false,
+    "cover" : "none",
     "vibration" : "none",
     "foam" : "none",
     "tankLid" : "04",
