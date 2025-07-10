@@ -68,7 +68,7 @@ class NotificationConfig:
                 "ln2_level_status": "04",     # Valor decimal normalizado (4 = Good)
                 "ln2_angle_status": "04",     # Valor decimal normalizado (4 = Good)  
                 "ln2_battery_status": "04",   # Valor decimal normalizado (4 = Good)
-                "ln2_foam_status": "08",      # Valor decimal normalizado (8 = Absent)
+                "ln2_foam_status": "04",      # Valor decimal normalizado (4 = Good)
             }
         
         if self.field_severities is None:

@@ -665,7 +665,7 @@ class MessageProcessor:
             5: "Warning",
             6: "Bad",
             7: "Present",
-            8: "Absent",
+            8: "Not found",
             9: "Very Low",
             10: "Low",
             11: "High",
