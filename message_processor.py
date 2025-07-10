@@ -531,7 +531,7 @@ class MessageProcessor:
                 return
             
             # Data formatada para a coleção (formato YYYY-MM-DD)
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
             formatted_date = now.strftime('%Y-%m-%d')
             formatted_time = now.strftime('%H-%M-%S')
             
@@ -551,7 +551,7 @@ class MessageProcessor:
                 'tempAmbient': safe_float_convert(message_dict.get('temp_ambient')),  # Temperatura ambiente
                 'tempPT100': safe_float_convert(message_dict.get('temp_pt100')),  # Temperatura PT100
                 'vBat': safe_float_convert(message_dict.get('vbat_mv')) / 1000.0 if message_dict.get('vbat_mv') else None,  # Converter mV para V
-                'timestamp': datetime.now(timezone.utc),  # Timestamp UTC da mensagem
+                'timestamp': now,  # Timestamp UTC da mensagem (usando o mesmo 'now' timezone-aware)
                 'package_id': message_dict.get('package_id'),  # ID do pacote para referência
                 'mac_equipament': mac_equipament,  # MAC do equipamento
             }
