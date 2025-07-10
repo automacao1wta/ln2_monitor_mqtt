@@ -400,6 +400,21 @@ class MessageProcessor:
                 elif status_code == 3:
                     realtime_data['cover'] = True   # Tampa aberta
             
+            # Factory Serial (mapear factory_serial do MQTT para factory_serial do Realtime)
+            factory_serial = message_dict.get('factory_serial')
+            if factory_serial:
+                realtime_data['factory_serial'] = factory_serial
+            
+            # Vibração (mapear ln2vibrationstatus do MQTT para vibration do Realtime)
+            ln2_vibration_status = message_dict.get('ln2vibrationstatus')
+            if ln2_vibration_status:
+                realtime_data['vibration'] = ln2_vibration_status
+            
+            # Foam (mapear ln2_foam_status do MQTT para foam do Realtime) 
+            ln2_foam_status = message_dict.get('ln2_foam_status')
+            if ln2_foam_status:
+                realtime_data['foam'] = ln2_foam_status
+            
             # Atualizar seção STATUS
             status_data = {}
             
@@ -607,8 +622,8 @@ class MessageProcessor:
             {"name": "angle_to_horizontal", "start_idx": 120, "end_idx": 124}, # [60-61]
             {"name": "vbat_mv", "start_idx": 124, "end_idx": 128},           # [62-63]
             {"name": "factory_serial", "start_idx": 136, "end_idx": 144},    # [68-71]
-            {"name": "Ln2Vibration", "start_idx": 144, "end_idx": 146},      # [72]
-            {"name": "Ln2VibrationStatus", "start_idx": 148, "end_idx": 150}, # [74]
+            {"name": "ln2vibration", "start_idx": 144, "end_idx": 146},      # [72]
+            {"name": "ln2vibrationstatus", "start_idx": 148, "end_idx": 150}, # [74]
             {"name": "rssi", "start_idx": 486, "end_idx": 488},              # [243]
         ]
         return schema
