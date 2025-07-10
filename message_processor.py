@@ -30,7 +30,7 @@ BEACONS = config['beacons']
 
 class MessageProcessor:
     def __init__(self, message_queue: Queue[tuple[datetime, MQTTMessage]]) -> None:
-        timestamp_now = datetime.now()
+        timestamp_now = datetime.now(timezone.utc)
         self.messages = []  # Lista de pacotes "normais" a serem enviados a cada 5 min
         self.last_messages_reset_timestamp = timestamp_now
         self.messages_reset_interval = timedelta(minutes=5)
@@ -271,6 +271,156 @@ class MessageProcessor:
         # Também salvar no Firestore
         self.save_message_to_firestore(topic, message_dict)
         
+        # Também atualizar Realtime Database
+        self.update_realtime_database(topic, message_dict)
+
+    def update_realtime_database(self, topic, message_dict):
+        """
+        Atualiza campos específicos do Realtime Database seguindo a estrutura do sistema
+        """
+        if not self.realtime_db:
+            self.logger.error("Sem conexão com o Realtime Database!")
+            return
+            
+        try:
+            # Extrair beacon_serial e converter para MAC
+            beacon_serial = message_dict.get('beacon_serial')
+            if not beacon_serial:
+                self.logger.error("Beacon serial não encontrado para atualizar Realtime Database")
+                return
+            
+            # Converter beacon_serial para formato MAC
+            mac_equipament = self._format_mac_address(beacon_serial)
+            
+            # Buscar Equipment ID pelo MAC
+            equipment_id = self._get_equipment_id_by_mac(mac_equipament)
+            if not equipment_id:
+                self.logger.error(f"Equipment ID não encontrado para MAC {mac_equipament} (beacon_serial: {beacon_serial})")
+                return
+            
+            # Preparar dados para atualização seguindo a estrutura do Realtime Database
+            def safe_float_convert(val):
+                try:
+                    if val is None:
+                        return None
+                    return float(val)
+                except (ValueError, TypeError):
+                    return None
+            
+            def safe_int_convert(val):
+                try:
+                    if val is None:
+                        return None
+                    return int(val)
+                except (ValueError, TypeError):
+                    return None
+                    
+            def extract_status_code(status_str):
+                """Extrai o código numérico de um status como '4 - Good' -> 4"""
+                if isinstance(status_str, str) and " - " in status_str:
+                    try:
+                        return int(status_str.split(" - ")[0])
+                    except (ValueError, IndexError):
+                        return None
+                elif isinstance(status_str, str):
+                    try:
+                        return int(status_str)
+                    except ValueError:
+                        return None
+                return status_str
+            
+            # Mapear dados MQTT para estrutura do Realtime Database
+            current_time = datetime.now(timezone.utc)
+            epoch_timestamp = str(int(current_time.timestamp()))
+            
+            # Atualizar seção REALTIME
+            realtime_data = {}
+            
+            # Temperatura PT100 (convertida de decimal)
+            temp_pt100 = safe_float_convert(message_dict.get('temp_pt100'))
+            if temp_pt100 is not None:
+                realtime_data['tempPT100'] = temp_pt100
+            
+            # Temperatura ambiente
+            temp_ambient = safe_float_convert(message_dict.get('temp_ambient'))
+            if temp_ambient is not None:
+                realtime_data['tempAmbient'] = temp_ambient
+            
+            # Tensão da bateria (converter de mV para V)
+            vbat_mv = safe_float_convert(message_dict.get('vbat_mv'))
+            if vbat_mv is not None:
+                realtime_data['vBat'] = vbat_mv / 1000.0  # Converter mV para V
+            
+            # Porcentagem da bateria
+            batt_percent = safe_int_convert(message_dict.get('batt_percent'))
+            if batt_percent is not None:
+                realtime_data['pBat'] = batt_percent
+            
+            # Status geral do dispositivo (mapear para deviceHealth)
+            ln2_general_status = message_dict.get('ln2_general_status')
+            if ln2_general_status:
+                status_code = extract_status_code(ln2_general_status)
+                if status_code == 4:
+                    realtime_data['deviceHealth'] = "Good"
+                elif status_code == 5:
+                    realtime_data['deviceHealth'] = "Warning"
+                elif status_code == 6:
+                    realtime_data['deviceHealth'] = "Bad"
+                else:
+                    realtime_data['deviceHealth'] = f"Status {status_code}"
+            
+            # Nível de LN2 (mapear baseado no ln2_level_status)
+            ln2_level_status = message_dict.get('ln2_level_status')
+            if ln2_level_status:
+                status_code = extract_status_code(ln2_level_status)
+                # 4 = Good (nível OK), outros códigos = problema de nível
+                realtime_data['LN2Level'] = (status_code == 4)
+            
+            # Tampa (mapear baseado no ln2_angle_status se disponível)
+            ln2_angle_status = message_dict.get('ln2_angle_status')
+            if ln2_angle_status:
+                status_code = extract_status_code(ln2_angle_status)
+                # 2 = Tampa fechada, 3 = Tampa aberta
+                if status_code == 2:
+                    realtime_data['cover'] = False  # Tampa fechada
+                elif status_code == 3:
+                    realtime_data['cover'] = True   # Tampa aberta
+            
+            # Atualizar seção STATUS
+            status_data = {}
+            
+            # lastTX (timestamp atual)
+            status_data['lastTX'] = epoch_timestamp
+            
+            # RSSI
+            rssi = safe_int_convert(message_dict.get('rssi'))
+            if rssi is not None:
+                status_data['rssi'] = rssi
+            
+            # Device connected (baseado em lastTX recente)
+            status_data['deviceConnected'] = True  # Se estamos recebendo dados, está conectado
+            
+            # MAC address
+            status_data['mac'] = mac_equipament
+            
+            # Atualizar no Realtime Database
+            equipment_ref = self.realtime_db.child(equipment_id)
+            
+            # Atualizar REALTIME
+            if realtime_data:
+                equipment_ref.child('REALTIME').update(realtime_data)
+                self.logger.debug(f"REALTIME atualizado para {equipment_id}: {realtime_data}")
+            
+            # Atualizar STATUS
+            if status_data:
+                equipment_ref.child('STATUS').update(status_data)
+                self.logger.debug(f"STATUS atualizado para {equipment_id}: {status_data}")
+            
+            self.logger.info(f"Realtime Database atualizado para {equipment_id} (MAC: {mac_equipament})")
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao atualizar Realtime Database: {e}")
+        
     def save_message_to_firestore(self, topic, message_dict):
         """
         Salva dados específicos no Firestore seguindo a estrutura solicitada
@@ -508,7 +658,7 @@ class MessageProcessor:
 
         message_dict['original_payload'] = hex_payload
         beacon_serial = message_dict.get('beacon_serial')
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         # --- Verificação de condição de alerta ---
         # Se qualquer status for diferente de ALERT_STATUS_VALUE, é alerta
@@ -599,7 +749,7 @@ class MessageProcessor:
                     self.duplicates_dict[message_dict['beacon_serial']].append(message_dict['package_id'])
 
                     # A cada ciclo de 5 minutos, envia o último pacote normal de cada beacon
-                    timestamp_now = datetime.now()
+                    timestamp_now = datetime.now(timezone.utc)
                     if timestamp_now - self.last_messages_reset_timestamp >= self.messages_reset_interval:
                         self.flush_beacon_data()
                         self.last_messages_reset_timestamp = timestamp_now
@@ -645,7 +795,7 @@ class MessageProcessor:
         try:
             cache_data = {
                 'mac_mapping': self.mac_cache,
-                'last_update': datetime.now().isoformat()
+                'last_update': datetime.now(timezone.utc).isoformat()
             }
             with open(self.mac_cache_file, 'w') as f:
                 json.dump(cache_data, f, indent=2)
@@ -661,7 +811,7 @@ class MessageProcessor:
 
     def _should_update_cache(self):
         """Verifica se o cache deve ser atualizado"""
-        return datetime.now() - self.last_cache_update >= self.cache_update_interval
+        return datetime.now(timezone.utc) - self.last_cache_update >= self.cache_update_interval
 
     def _update_mac_cache_from_realtime_db(self):
         """Atualiza o cache consultando apenas equipamentos não conhecidos no Realtime Database"""
@@ -704,7 +854,7 @@ class MessageProcessor:
 
             # Salvar cache atualizado
             self._save_mac_cache()
-            self.last_cache_update = datetime.now()
+            self.last_cache_update = datetime.now(timezone.utc)
             
             self.logger.info(f"Cache atualizado: {new_mappings} novos, {updated_mappings} atualizados. Total: {len(self.mac_cache)}")
 

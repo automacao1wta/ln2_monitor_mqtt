@@ -249,7 +249,7 @@ class NotificationHandler:
         """Worker para agrupar notificações pendentes"""
         while not self._stop_event.is_set():
             try:
-                current_time = datetime.now()
+                current_time = datetime.now(timezone.utc)
                 for device_id, device_status in self.device_cache.items():
                     if device_status.pending_notifications:
                         # Verificar se há notificações pendentes antigas o suficiente para enviar
@@ -282,12 +282,12 @@ class NotificationHandler:
                 device_id=equipment_id,
                 last_status_values={},
                 last_notification_timestamps={},
-                last_seen=datetime.now(),
+                last_seen=datetime.now(timezone.utc),
                 pending_notifications=[]
             )
         
         device_status = self.device_cache[equipment_id]
-        device_status.last_seen = datetime.now()
+        device_status.last_seen = datetime.now(timezone.utc)
         
         notifications_to_add = []
         
@@ -326,7 +326,7 @@ class NotificationHandler:
             if self.config.group_notifications_same_device and len(notifications_to_add) > 1:
                 # Adicionar timestamp de criação
                 for notif in notifications_to_add:
-                    notif['created_at'] = datetime.now()
+                    notif['created_at'] = datetime.now(timezone.utc)
                 device_status.pending_notifications.extend(notifications_to_add)
             else:
                 # Enviar imediatamente
@@ -511,7 +511,7 @@ class NotificationHandler:
         if not device_status:
             return True
         
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         hour_ago = current_time - timedelta(hours=1)
         
         # Contar TODAS as notificações na última hora (independente do tipo)
@@ -586,7 +586,7 @@ class NotificationHandler:
             # Atualizar timestamps de rate limiting
             device_status = self.device_cache.get(equipment_id)
             if device_status:
-                device_status.last_notification_timestamps[notification['type']] = datetime.now()
+                device_status.last_notification_timestamps[notification['type']] = datetime.now(timezone.utc)
             
             # Preparar notificação para envio (converter TODOS os valores datetime recursivamente)
             notification_to_send = self._serialize_notification_data(notification)
@@ -659,7 +659,7 @@ class NotificationHandler:
             "total_active_notifications": sum(len(notifs) for notifs in self.active_notifications_cache.values()),
             "polling_interval_minutes": self.config.polling_interval_minutes,
             "connection_timeout_hours": self.config.connection_timeout_hours,
-            "last_check": datetime.now().isoformat()
+            "last_check": datetime.now(timezone.utc).isoformat()
         }
     
     def toggle_mode(self, new_mode: NotificationMode):
