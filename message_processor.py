@@ -196,7 +196,7 @@ class MessageProcessor:
             "status_osc_cnt, ln2_acc_data_available, ln2_tx_cause_status, temp_pt100, temp_ambient, angle_to_horizontal, vbat_mv, "
             "factory_serial, ln2vibration, ln2vibrationstatus, rssi, original_payload"
             ") VALUES ("
-            + ",".join(["%s"] * 48) + ")"
+            + ",".join(["%s"] * 47) + ")"
         )
         def safe_float(val):
             try:
