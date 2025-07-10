@@ -102,7 +102,7 @@ class MessageProcessor:
         self.mac_cache_file = "mac_equipment_cache.json"
         self.mac_cache = {}
         self.cache_update_interval = timedelta(hours=1)  # Atualizar cache a cada 1 hora
-        self.last_cache_update = datetime.min
+        self.last_cache_update = datetime.min.replace(tzinfo=timezone.utc)
         self._load_mac_cache()
 
         # Inicializar sistema de notificações
@@ -573,10 +573,17 @@ class MessageProcessor:
             
             # Processar notificações após salvar no Firestore
             if hasattr(self, 'notification_handler') and self.notification_handler:
-                self.notification_handler.process_mqtt_data(equipment_id, message_dict)
+                try:
+                    self.notification_handler.process_mqtt_data(equipment_id, message_dict)
+                except Exception as notification_error:
+                    self.logger.error(f"Erro no sistema de notificações: {notification_error}")
+                    # Não interromper o salvamento no Firestore por erro de notificação
             
         except Exception as e:
             self.logger.error(f"Erro ao salvar no Firestore: {e}")
+            # Adicionar mais detalhes para debug
+            import traceback
+            self.logger.error(f"Traceback completo: {traceback.format_exc()}")
         
     def _twos_comp(self, val, bits):
         """compute the 2's complement of int value val"""
@@ -681,7 +688,7 @@ class MessageProcessor:
                 parsed_hex[k] = self._twos_comp(int(v, 16), 8)
             elif 'epochtime' in k:
                 parsed_hex[k] = int(v, 16)
-                parsed_hex[k] = datetime.fromtimestamp(parsed_hex[k]).strftime("%Y-%m-%d %H-%M-%S.%f")[:-3]
+                parsed_hex[k] = datetime.fromtimestamp(parsed_hex[k], tz=timezone.utc).strftime("%Y-%m-%d %H-%M-%S.%f")[:-3]
             elif 'package_id' in k:
                 parsed_hex[k] = int(v, 16)
             elif 'vccbat' in k:
@@ -853,25 +860,33 @@ class MessageProcessor:
                     if file_content:  # Verificar se o arquivo não está vazio
                         cache_data = json.loads(file_content)
                         self.mac_cache = cache_data.get('mac_mapping', {})
-                        self.last_cache_update = datetime.fromisoformat(cache_data.get('last_update', datetime.min.isoformat()))
+                        # Garantir que last_update seja timezone-aware
+                        last_update_str = cache_data.get('last_update', datetime.min.replace(tzinfo=timezone.utc).isoformat())
+                        try:
+                            self.last_cache_update = datetime.fromisoformat(last_update_str)
+                            # Se não tiver timezone, adicionar UTC
+                            if self.last_cache_update.tzinfo is None:
+                                self.last_cache_update = self.last_cache_update.replace(tzinfo=timezone.utc)
+                        except ValueError:
+                            self.last_cache_update = datetime.min.replace(tzinfo=timezone.utc)
                         self.logger.info(f"Cache MAC carregado: {len(self.mac_cache)} equipamentos")
                     else:
                         self.logger.warning("Arquivo de cache MAC está vazio, inicializando cache novo")
                         self.mac_cache = {}
-                        self.last_cache_update = datetime.min
+                        self.last_cache_update = datetime.min.replace(tzinfo=timezone.utc)
             else:
                 self.logger.info("Arquivo de cache MAC não encontrado, será criado")
                 self.mac_cache = {}
-                self.last_cache_update = datetime.min
+                self.last_cache_update = datetime.min.replace(tzinfo=timezone.utc)
         except (json.JSONDecodeError, ValueError) as e:
             self.logger.error(f"Erro ao decodificar JSON do cache MAC: {e}")
             self.logger.info("Inicializando novo cache MAC")
             self.mac_cache = {}
-            self.last_cache_update = datetime.min
+            self.last_cache_update = datetime.min.replace(tzinfo=timezone.utc)
         except Exception as e:
             self.logger.error(f"Erro ao carregar cache MAC: {e}")
             self.mac_cache = {}
-            self.last_cache_update = datetime.min
+            self.last_cache_update = datetime.min.replace(tzinfo=timezone.utc)
 
     def _save_mac_cache(self):
         """Salva o cache de MAC para Equipment ID no arquivo local"""
@@ -894,7 +909,16 @@ class MessageProcessor:
 
     def _should_update_cache(self):
         """Verifica se o cache deve ser atualizado"""
-        return datetime.now(timezone.utc) - self.last_cache_update >= self.cache_update_interval
+        try:
+            # Garantir que last_cache_update seja timezone-aware
+            if self.last_cache_update.tzinfo is None:
+                self.last_cache_update = self.last_cache_update.replace(tzinfo=timezone.utc)
+            
+            return datetime.now(timezone.utc) - self.last_cache_update >= self.cache_update_interval
+        except Exception as e:
+            self.logger.error(f"Erro ao verificar atualização de cache: {e}")
+            # Se houver erro, forçar atualização
+            return True
 
     def _update_mac_cache_from_realtime_db(self):
         """Atualiza o cache consultando apenas equipamentos não conhecidos no Realtime Database"""
