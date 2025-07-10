@@ -655,12 +655,12 @@ class MessageProcessor:
     
     def _get_status_comment(self, value: int) -> str:
         status_comments = {
-            -2: "Sem informação",
-            -1: "Dado inválido",
-            0: "Ligado",
-            1: "Desligado",
-            2: "Tampa fechada",
-            3: "Tampa aberto",
+            -2: "No information",
+            -1: "Invalid data",
+            0: "On",
+            1: "Off",
+            2: "Lid closed",
+            3: "Lid open",
             4: "Good",
             5: "Warning",
             6: "Bad",
@@ -677,7 +677,7 @@ class MessageProcessor:
             17: "Tx Period Elapsed",
             18: "Forced Tx"
         }
-        label = status_comments.get(value, f"Desconhecido ({value})")
+        label = status_comments.get(value, f"Unknown ({value})")
         return f"{value} - {label}"
 
 
