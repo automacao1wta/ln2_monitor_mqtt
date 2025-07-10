@@ -400,23 +400,74 @@ class MessageProcessor:
             # Device connected (baseado em lastTX recente)
             status_data['deviceConnected'] = True  # Se estamos recebendo dados, está conectado
             
-            # MAC address
+            # MAC address (formatado com dois pontos)
             status_data['mac'] = mac_equipament
             
-            # Atualizar no Realtime Database
+            # Versão do firmware (concatenação dos campos fw_version)
+            fw_prefix = message_dict.get('fw_version_prefix', '00')
+            fw_major = message_dict.get('fw_version_major', '0')
+            fw_minor = message_dict.get('fw_version_minor', '0')
+            fw_patch = message_dict.get('fw_version_patch', '0')
+            fw_build = message_dict.get('fw_version_build', '0')
+            
+            # Converter hex para decimal se necessário e formatar versão
+            try:
+                major = str(int(fw_major, 16)) if fw_major else '0'
+                minor = str(int(fw_minor, 16)) if fw_minor else '0'
+                patch = str(int(fw_patch, 16)) if fw_patch else '0'
+                build = str(int(fw_build, 16)) if fw_build else '0'
+                version_fw = f"v{major}.{minor}.{patch}.{build}"
+                status_data['versionFW'] = version_fw
+            except (ValueError, TypeError):
+                # Fallback se houver erro na conversão
+                status_data['versionFW'] = f"v{fw_major}.{fw_major}.{fw_minor}.{fw_patch}.{fw_build}"
+            
+            # Atualizar no Realtime Database com otimização (só escrever se valor mudou)
             equipment_ref = self.realtime_db.child(equipment_id)
             
-            # Atualizar REALTIME
+            # Obter dados atuais para comparação (evitar writes desnecessários)
+            try:
+                current_realtime = equipment_ref.child('REALTIME').get() or {}
+                current_status = equipment_ref.child('STATUS').get() or {}
+            except Exception as e:
+                self.logger.warning(f"Erro ao obter dados atuais do Realtime DB: {e}")
+                current_realtime = {}
+                current_status = {}
+            
+            # Atualizar REALTIME (apenas campos que mudaram)
             if realtime_data:
-                equipment_ref.child('REALTIME').update(realtime_data)
-                self.logger.debug(f"REALTIME atualizado para {equipment_id}: {realtime_data}")
+                realtime_updates = {}
+                for key, new_value in realtime_data.items():
+                    current_value = current_realtime.get(key)
+                    if current_value != new_value:
+                        realtime_updates[key] = new_value
+                
+                if realtime_updates:
+                    equipment_ref.child('REALTIME').update(realtime_updates)
+                    self.logger.debug(f"REALTIME atualizado para {equipment_id}: {realtime_updates}")
+                else:
+                    self.logger.debug(f"REALTIME sem mudanças para {equipment_id}")
             
-            # Atualizar STATUS
+            # Atualizar STATUS (apenas campos que mudaram)
             if status_data:
-                equipment_ref.child('STATUS').update(status_data)
-                self.logger.debug(f"STATUS atualizado para {equipment_id}: {status_data}")
+                status_updates = {}
+                for key, new_value in status_data.items():
+                    current_value = current_status.get(key)
+                    if current_value != new_value:
+                        status_updates[key] = new_value
+                
+                if status_updates:
+                    equipment_ref.child('STATUS').update(status_updates)
+                    self.logger.debug(f"STATUS atualizado para {equipment_id}: {status_updates}")
+                else:
+                    self.logger.debug(f"STATUS sem mudanças para {equipment_id}")
             
-            self.logger.info(f"Realtime Database atualizado para {equipment_id} (MAC: {mac_equipament})")
+            # Log apenas se houve atualizações
+            if (realtime_data and any(current_realtime.get(k) != v for k, v in realtime_data.items())) or \
+               (status_data and any(current_status.get(k) != v for k, v in status_data.items())):
+                self.logger.info(f"Realtime Database atualizado para {equipment_id} (MAC: {mac_equipament})")
+            else:
+                self.logger.debug(f"Realtime Database sem mudanças para {equipment_id} (MAC: {mac_equipament})")
             
         except Exception as e:
             self.logger.error(f"Erro ao atualizar Realtime Database: {e}")
