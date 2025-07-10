@@ -281,6 +281,56 @@ class MessageProcessor:
         # Também atualizar Realtime Database
         self.update_realtime_database(topic, message_dict)
 
+    def _process_battery_percent(self, batt_percent_hex):
+        """
+        Processa o valor de porcentagem da bateria de hex para int (0-100)
+        Usado tanto no Realtime Database quanto no Firestore
+        """
+        if batt_percent_hex is None:
+            return None
+        
+        try:
+            # Converter hex para decimal
+            batt_percent_int = int(batt_percent_hex, 16)
+            # Limitar entre 0 e 100
+            batt_percent_int = max(0, min(100, batt_percent_int))
+            return batt_percent_int
+        except (ValueError, TypeError):
+            self.logger.warning(f"Erro ao converter batt_percent hex '{batt_percent_hex}' para int")
+            return None
+
+    def _process_vbat_mv(self, vbat_mv):
+        """
+        Processa tensão da bateria (mV para V)
+        Usado tanto no Realtime Database quanto no Firestore
+        """
+        if vbat_mv is None:
+            return None
+        
+        try:
+            vbat_float = float(vbat_mv)
+            return vbat_float / 1000.0  # Converter mV para V
+        except (ValueError, TypeError):
+            return None
+
+    def _safe_float_convert(self, val):
+        """Função utilitária para conversão segura para float"""
+        try:
+            if val is None:
+                return None
+            return float(val)
+        except (ValueError, TypeError):
+            return None
+
+    def _safe_int_convert(self, val):
+        """Função utilitária para conversão segura para int"""
+        try:
+            if val is None:
+                return None
+            return int(val)
+        except (ValueError, TypeError):
+            return None
+
     def update_realtime_database(self, topic, message_dict):
         """
         Atualiza campos específicos do Realtime Database seguindo a estrutura do sistema
@@ -305,23 +355,6 @@ class MessageProcessor:
                 self.logger.error(f"Equipment ID não encontrado para MAC {mac_equipament} (beacon_serial: {beacon_serial})")
                 return
             
-            # Preparar dados para atualização seguindo a estrutura do Realtime Database
-            def safe_float_convert(val):
-                try:
-                    if val is None:
-                        return None
-                    return float(val)
-                except (ValueError, TypeError):
-                    return None
-            
-            def safe_int_convert(val):
-                try:
-                    if val is None:
-                        return None
-                    return int(val)
-                except (ValueError, TypeError):
-                    return None
-                    
             def extract_status_code(status_str):
                 """Extrai o código numérico de um status como '4 - Good' -> 4"""
                 if isinstance(status_str, str) and " - " in status_str:
@@ -344,31 +377,24 @@ class MessageProcessor:
             realtime_data = {}
             
             # Temperatura PT100 (convertida de decimal)
-            temp_pt100 = safe_float_convert(message_dict.get('temp_pt100'))
+            temp_pt100 = self._safe_float_convert(message_dict.get('temp_pt100'))
             if temp_pt100 is not None:
                 realtime_data['tempPT100'] = temp_pt100
             
             # Temperatura ambiente
-            temp_ambient = safe_float_convert(message_dict.get('temp_ambient'))
+            temp_ambient = self._safe_float_convert(message_dict.get('temp_ambient'))
             if temp_ambient is not None:
                 realtime_data['tempAmbient'] = temp_ambient
             
-            # Tensão da bateria (converter de mV para V)
-            vbat_mv = safe_float_convert(message_dict.get('vbat_mv'))
-            if vbat_mv is not None:
-                realtime_data['vBat'] = vbat_mv / 1000.0  # Converter mV para V
+            # Tensão da bateria (converter de mV para V) - usando função compartilhada
+            vbat_v = self._process_vbat_mv(message_dict.get('vbat_mv'))
+            if vbat_v is not None:
+                realtime_data['vBat'] = vbat_v
             
-            # Porcentagem da bateria (converter hex para int e limitar entre 0-100)
-            batt_percent_hex = message_dict.get('batt_percent')
-            if batt_percent_hex is not None:
-                try:
-                    # Converter hex para decimal
-                    batt_percent_int = int(batt_percent_hex, 16)
-                    # Limitar entre 0 e 100
-                    batt_percent_int = max(0, min(100, batt_percent_int))
-                    realtime_data['pBat'] = batt_percent_int
-                except (ValueError, TypeError):
-                    self.logger.warning(f"Erro ao converter batt_percent hex '{batt_percent_hex}' para int")
+            # Porcentagem da bateria - usando função compartilhada
+            batt_percent = self._process_battery_percent(message_dict.get('batt_percent'))
+            if batt_percent is not None:
+                realtime_data['pBat'] = batt_percent
             
             # Status geral do dispositivo (mapear para deviceHealth)
             ln2_general_status = message_dict.get('ln2_general_status')
@@ -422,7 +448,7 @@ class MessageProcessor:
             status_data['lastTX'] = epoch_timestamp
             
             # RSSI
-            rssi = safe_int_convert(message_dict.get('rssi'))
+            rssi = self._safe_int_convert(message_dict.get('rssi'))
             if rssi is not None:
                 status_data['rssi'] = rssi
             
@@ -535,22 +561,13 @@ class MessageProcessor:
             formatted_date = now.strftime('%Y-%m-%d')
             formatted_time = now.strftime('%H-%M-%S')
             
-            # Extrair e converter os valores específicos solicitados
-            def safe_float_convert(val):
-                try:
-                    if val is None:
-                        return None
-                    return float(val)
-                except (ValueError, TypeError):
-                    return None
-            
-            # Mapeamento dos dados para o Firestore
+            # Mapeamento dos dados para o Firestore usando funções compartilhadas
             firestore_data = {
                 'humidity': None,  # Não temos esse campo nos dados atuais, definindo como None
-                'pBat': safe_float_convert(message_dict.get('batt_percent')),  # Porcentagem da bateria
-                'tempAmbient': safe_float_convert(message_dict.get('temp_ambient')),  # Temperatura ambiente
-                'tempPT100': safe_float_convert(message_dict.get('temp_pt100')),  # Temperatura PT100
-                'vBat': safe_float_convert(message_dict.get('vbat_mv')) / 1000.0 if message_dict.get('vbat_mv') else None,  # Converter mV para V
+                'pBat': self._process_battery_percent(message_dict.get('batt_percent')),  # Usando função compartilhada
+                'tempAmbient': self._safe_float_convert(message_dict.get('temp_ambient')),  # Temperatura ambiente
+                'tempPT100': self._safe_float_convert(message_dict.get('temp_pt100')),  # Temperatura PT100
+                'vBat': self._process_vbat_mv(message_dict.get('vbat_mv')),  # Usando função compartilhada
                 'timestamp': now,  # Timestamp UTC da mensagem (usando o mesmo 'now' timezone-aware)
                 'package_id': message_dict.get('package_id'),  # ID do pacote para referência
                 'mac_equipament': mac_equipament,  # MAC do equipamento
