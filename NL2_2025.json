@@ -15,7 +15,9 @@
     "message" : "none",
     "Redundancy": "Good",
     "cover" : false,
-    "vibration" : true,
+    "vibration" : "none",
+    "foam" : "none",
+    "tankLid" : "04",
     "humidity" : 45
   },
   "SETTINGS" : {

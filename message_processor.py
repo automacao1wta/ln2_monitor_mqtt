@@ -351,10 +351,17 @@ class MessageProcessor:
             if vbat_mv is not None:
                 realtime_data['vBat'] = vbat_mv / 1000.0  # Converter mV para V
             
-            # Porcentagem da bateria
-            batt_percent = safe_int_convert(message_dict.get('batt_percent'))
-            if batt_percent is not None:
-                realtime_data['pBat'] = batt_percent
+            # Porcentagem da bateria (converter hex para int e limitar entre 0-100)
+            batt_percent_hex = message_dict.get('batt_percent')
+            if batt_percent_hex is not None:
+                try:
+                    # Converter hex para decimal
+                    batt_percent_int = int(batt_percent_hex, 16)
+                    # Limitar entre 0 e 100
+                    batt_percent_int = max(0, min(100, batt_percent_int))
+                    realtime_data['pBat'] = batt_percent_int
+                except (ValueError, TypeError):
+                    self.logger.warning(f"Erro ao converter batt_percent hex '{batt_percent_hex}' para int")
             
             # Status geral do dispositivo (mapear para deviceHealth)
             ln2_general_status = message_dict.get('ln2_general_status')
@@ -369,18 +376,18 @@ class MessageProcessor:
                 else:
                     realtime_data['deviceHealth'] = f"Status {status_code}"
             
-            # Nível de LN2 (mapear baseado no ln2_level_status)
+            # Nível de LN2 (manter valor completo do ln2_level_status)
             ln2_level_status = message_dict.get('ln2_level_status')
             if ln2_level_status:
-                status_code = extract_status_code(ln2_level_status)
-                # 4 = Good (nível OK), outros códigos = problema de nível
-                realtime_data['LN2Level'] = (status_code == 4)
+                realtime_data['LN2Level'] = ln2_level_status  # Manter valor completo como "10 - Low"
             
-            # Tampa (mapear baseado no ln2_angle_status se disponível)
+            # Tampa (mapear baseado no ln2_angle_status - tankLid)
             ln2_angle_status = message_dict.get('ln2_angle_status')
             if ln2_angle_status:
+                realtime_data['tankLid'] = ln2_angle_status  # Manter valor completo como "3 - Tampa aberto"
+                
+                # Também atualizar o campo cover (boolean) para compatibilidade
                 status_code = extract_status_code(ln2_angle_status)
-                # 2 = Tampa fechada, 3 = Tampa aberta
                 if status_code == 2:
                     realtime_data['cover'] = False  # Tampa fechada
                 elif status_code == 3:
