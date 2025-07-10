@@ -87,6 +87,9 @@ CREATE TABLE mqtt_messages (
     status_osc_cnt_lsb VARCHAR(40),
     ln2_acc_data_available VARCHAR(40),
     ln2_tx_cause_status VARCHAR(40),
+    factory_serial VARCHAR(40),
+    ln2vibration VARCHAR(40),
+    ln2vibrationstatus VARCHAR(40),
     rssi INTEGER,
     original_payload TEXT
 );

@@ -168,6 +168,9 @@ class MessageProcessor:
                 "temp_ambient": "temp_ambient",
                 "angle_to_horizontal": "angle_to_horizontal",
                 "vbat_mv": "vbat_mv",
+                "factory_serial": "factory_serial",
+                "ln2vibration": "ln2vibration",
+                "ln2vibrationstatus": "ln2vibrationstatus",
                 "original_payload": "original_payload",
             }
             normalized = {}
@@ -190,9 +193,10 @@ class MessageProcessor:
             "r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, "
             "sensor_data_def_id, fw_version_prefix, fw_version_major, fw_version_minor, fw_version_patch, fw_version_build, "
             "acc_mode_full, ton_toff, ln2_level_status, ln2_angle_status, ln2_battery_status, batt_percent, ln2_foam_status, ln2_general_status, "
-            "status_osc_cnt, ln2_acc_data_available, ln2_tx_cause_status, temp_pt100, temp_ambient, angle_to_horizontal, vbat_mv, rssi, original_payload"
+            "status_osc_cnt, ln2_acc_data_available, ln2_tx_cause_status, temp_pt100, temp_ambient, angle_to_horizontal, vbat_mv, "
+            "factory_serial, ln2vibration, ln2vibrationstatus, rssi, original_payload"
             ") VALUES ("
-            + ",".join(["%s"] * 44) + ")"
+            + ",".join(["%s"] * 47) + ")"
         )
         def safe_float(val):
             try:
@@ -599,7 +603,10 @@ class MessageProcessor:
             {"name": "temp_ambient", "start_idx": 116, "end_idx": 120},       # [58-59]
             {"name": "angle_to_horizontal", "start_idx": 120, "end_idx": 124}, # [60-61]
             {"name": "vbat_mv", "start_idx": 124, "end_idx": 128},           # [62-63]
-            {"name": "rssi", "start_idx": 486, "end_idx": 488},                # [62-63]
+            {"name": "factory_serial", "start_idx": 136, "end_idx": 144},    # [68-71]
+            {"name": "Ln2Vibration", "start_idx": 144, "end_idx": 146},      # [72]
+            {"name": "Ln2VibrationStatus", "start_idx": 148, "end_idx": 150}, # [74]
+            {"name": "rssi", "start_idx": 486, "end_idx": 488},              # [243]
         ]
         return schema
 
