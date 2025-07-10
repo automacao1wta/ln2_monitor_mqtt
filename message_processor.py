@@ -256,6 +256,9 @@ class MessageProcessor:
             safe_float(message_dict.get("temp_ambient")),  # 41
             safe_float(message_dict.get("angle_to_horizontal")),  # 42
             safe_float(message_dict.get("vbat_mv")),  # 43
+            message_dict.get("factory_serial"),  # 34
+            message_dict.get("ln2vibration"),  # 35
+            message_dict.get("ln2vibrationstatus"),  # 36
             safe_int(message_dict.get("rssi")),
             message_dict.get("original_payload"),  # 44
         )
