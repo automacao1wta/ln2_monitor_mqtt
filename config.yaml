@@ -5,8 +5,8 @@ broker:
   host: 34.10.196.198 # SERVIDOR LOCAL 10.227.101.110 # ip 34.10.196.198 VM em GCP
   port: 1883
 client:
-  client_id: ln2_0000001  # Choose a unique client ID
-  username: ln2_mqtt_pc_murilo # PC Murilo
+  client_id: ln2_VM  # Choose a unique client ID
+  username: ln2_mqtt_VM # PC Murilo
   password: '123456789'
 topics: # MQTT topics/gateways (leave empty for all topics)
   # - WTAD4D4DA2DE6B4/#   # - WTAD4D4DA2DE6B4/#,  - WTAD4D4DA2DE680/#,  - WTAD4D4DA2DE690/#
